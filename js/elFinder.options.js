@@ -193,6 +193,25 @@ elFinder.prototype._options = {
 					user     : $('<input type="text"/>'),
 					pass     : $('<input type="password"/>')
 				}
+			},
+			flickr: {
+				inputs: {
+					host     : $('<span id="elfinder-cmd-netmout-flickr-host"><span class="elfinder-info-spinner"/></span></span><input type="hidden" value="flickr"/>'),
+					path     : $('<input type="text" value="/"/>'),
+					user     : $('<input id="elfinder-cmd-netmout-flickr-user" type="hidden"/>'),
+					pass     : $('<input id="elfinder-cmd-netmout-flickr-pass" type="hidden"/>')
+				},
+				select: function(fm){
+					if ($('#elfinder-cmd-netmout-flickr-host').find('span').length) {
+						fm.request({
+							data : {cmd : 'netmount', protocol: 'flickr', host: 'flickr.com', user: 'init', pass: 'init', options: {url: fm.uploadURL}},
+							preventDefault : true
+						}).done(function(data){
+							$('#elfinder-cmd-netmout-flickr-host')
+							.html(data.body.replace(/\{msg:([^}]+)\}/g, function(whole,s1){return fm.i18n(s1,'Flickr.com');}));
+						}).fail(function(){});
+					}					
+				}
 			}
 		},
 
