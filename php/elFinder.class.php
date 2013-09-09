@@ -1570,7 +1570,7 @@ class elFinder {
 		
 			$res = $this->upload($args);
 			$script = '
-				var elf=window.opener.document.getElementById(\''.htmlspecialchars($args['node']).'\').elfinder;
+				var elf=window.opener.document.getElementById(\''.htmlspecialchars($args['node'], ENT_QUOTES, 'UTF-8').'\').elfinder;
 				var data = '.json_encode($res).';
 				data.warning && elf.error(data.warning);
 				data.added && data.added.length && elf.add(data);
