@@ -94,9 +94,30 @@ elFinder.prototype.commands.open = function() {
 			}
 			w = 'width='+winW+',height='+winH;
 
-			if (!window.open(url, '_blank', w + ',top=50,left=50,scrollbars=yes,resizable=yes')) {
+			var wnd = window.open('', 'new_window', w + ',top=50,left=50,scrollbars=yes,resizable=yes');
+			if (!wnd) {
 				return dfrd.reject('errPopup');
 			}
+			
+			var form = document.createElement("form");
+			form.action = fm.options.url;
+			form.method = 'POST';
+			form.target = 'new_window';
+			form.style.display = 'none';
+			var params = $.extend({}, fm.options.customData, {
+				cmd: 'file',
+				target: file.hash
+			});
+			$.each(params, function(key, val)
+			{
+				var input = document.createElement("input");
+				input.name = key;
+				input.value = val;
+				form.appendChild(input);
+			});
+			
+			document.body.appendChild(form);
+			form.submit();
 		}
 		return dfrd.resolve(hashes);
 	}
