@@ -1345,36 +1345,21 @@ class elFinder {
 	 **/
 	 protected function pixlr($args) {
 		
-	 	if (! empty($args['target'])) {
-		 	$args['upload'] = array( $args['image'] );
+		$out = array();
+		if (! empty($args['target'])) {
+			$args['upload'] = array( $args['image'] );
 			$args['name']   = array( preg_replace('/\.[a-z]{1,4}$/i', '', $args['title']).'.'.$args['type'] );
-		
+			
 			$res = $this->upload($args);
-			$script = '
-				var elf=window.opener.document.getElementById(\''.htmlspecialchars($args['node'], ENT_QUOTES, 'UTF-8').'\').elfinder;
-				var data = '.json_encode($res).';
-				data.warning && elf.error(data.warning);
-				data.added && data.added.length && elf.add(data);
-				elf.trigger(\'upload\', data);
-				window.close();';
-	 	} else {
-	 		$script = 'window.close();';
-	 	}
-	 	$out = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><script>'.$script.'</script></head><body><a href="#" onlick="window.close();return false;">Close this window</a></body></html>';
-	 	
-	 	while( ob_get_level() ) {
-			if (! ob_end_clean()) {
-				break;
-			}
+			
+			$out = array(
+				'node' => $args['node'],
+				'json' => json_encode($res),
+				'bind' => 'upload'
+			);
 		}
-	 	
-	 	header('Content-Type: text/html; charset=utf-8');
-	 	header('Content-Length: '.strlen($out));
-	 	header('Cache-Control: private');
-	 	header('Pragma: no-cache');
-	 	echo $out;
-	 	
-		exit();
+		
+		return $this->callback($out);
 	}
 
 	/***************************************************************************/
