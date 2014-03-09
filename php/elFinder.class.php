@@ -67,7 +67,7 @@ class elFinder {
 		'rename'    => array('target' => true, 'name' => true, 'mimes' => false),
 		'duplicate' => array('targets' => true, 'suffix' => false),
 		'paste'     => array('dst' => true, 'targets' => true, 'cut' => false, 'mimes' => false),
-		'upload'    => array('target' => true, 'FILES' => true, 'mimes' => false, 'html' => false),
+		'upload'    => array('target' => true, 'FILES' => true, 'mimes' => false, 'html' => false, 'upload' => false, 'name' => false),
 		'get'       => array('target' => true),
 		'put'       => array('target' => true, 'content' => '', 'mimes' => false),
 		'archive'   => array('targets' => true, 'type' => true, 'mimes' => false),
@@ -78,7 +78,8 @@ class elFinder {
 		'resize'    => array('target' => true, 'width' => true, 'height' => true, 'mode' => false, 'x' => false, 'y' => false, 'degree' => false),
 		'netmount'  => array('protocol' => true, 'host' => true, 'path' => false, 'port' => false, 'user' => true, 'pass' => true, 'alias' => false, 'options' => false),
 		'url'       => array('target' => true, 'options' => false),
-		'callback'  => array('node' => true, 'json' => false, 'bind' => false, 'done' => false)
+		'callback'  => array('node' => true, 'json' => false, 'bind' => false, 'done' => false),
+		'pixlr'     => array('target' => false, 'node' => false, 'image' => false, 'type' => false, 'title' => false)
 	);
 	
 	/**
@@ -950,6 +951,26 @@ class elFinder {
 	}
 	
 	/**
+	 * Get remote contents with cURL
+	 *
+	 * @param  string  $url     target url
+	 * @param  int     $timeout timeout (sec)
+	 * @return string or bool(false)
+	 * @retval string contents
+	 * @retval false error
+	 **/
+	 protected function curl_get_contents( $url, $timeout = 10 ){
+		$ch = curl_init();
+		curl_setopt( $ch, CURLOPT_URL, $url );
+		curl_setopt( $ch, CURLOPT_HEADER, false );
+		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+		curl_setopt( $ch, CURLOPT_TIMEOUT, $timeout );
+		$result = curl_exec( $ch );
+		curl_close( $ch );
+		return $result;
+	}
+	
+	/**
 	 * Save uploaded files
 	 *
 	 * @param  array
@@ -963,7 +984,22 @@ class elFinder {
 		$result = array('added' => array(), 'header' => empty($args['html']) ? false : 'Content-Type: text/html; charset=utf-8');
 		
 		if (empty($files)) {
-			return array('error' => $this->error(self::ERROR_UPLOAD, self::ERROR_UPLOAD_NO_FILES), 'header' => $header);
+			if ($volume && isset($args['upload']) && is_array($args['upload'])) {
+				foreach($args['upload'] as $i => $url) {
+					$data = $this->curl_get_contents($url);
+					if ($data) {
+						$tmpfname = tempnam(sys_get_temp_dir(), 'UPL');
+						file_put_contents($tmpfname, $data);
+						$files['tmp_name'][$i] = $tmpfname;
+						$_name = isset($args['name'][$i])? $args['name'][$i] : preg_replace('#^.*?([^/]+)$#', '$1', rawurldecode($url));
+						$files['name'][$i] = preg_replace('/[\/\\?*:|"<>]/', '_', $_name);
+						$files['error'][$i] = 0;
+					}
+				}
+			}
+			if (empty($files)) {
+				return array('error' => $this->error(self::ERROR_UPLOAD, self::ERROR_UPLOAD_NO_FILES), 'header' => $header);
+			}
 		}
 		
 		if (!$volume) {
@@ -982,16 +1018,25 @@ class elFinder {
 			if (($fp = fopen($tmpname, 'rb')) == false) {
 				$result['warning'] = $this->error(self::ERROR_UPLOAD_FILE, $name, self::ERROR_UPLOAD_TRANSFER);
 				$this->uploadDebug = 'Upload error: unable open tmp file';
+				if (! is_uploaded_file($tmpname)) {
+					@ unlink($tmpname);
+					continue;
+				}
 				break;
 			}
 			
 			if (($file = $volume->upload($fp, $target, $name, $tmpname)) === false) {
 				$result['warning'] = $this->error(self::ERROR_UPLOAD_FILE, $name, $volume->error());
 				fclose($fp);
+				if (! is_uploaded_file($tmpname)) {
+					unlink($tmpname);
+					continue;
+				}
 				break;
 			}
 			
 			fclose($fp);
+			if (! is_uploaded_file($tmpname)) unlink($tmpname);
 			$result['added'][] = $file;
 		}
 		
@@ -1225,11 +1270,11 @@ class elFinder {
 		}
 		return array();
 	}
-	
+
 	/**
 	 * Output callback result with JavaScript that control elFinder
 	 * or HTTP redirect to callbackWindowURL
-	 *
+	 * 
 	 * @param  array  command arguments
 	 * @author Naoki Sawada
 	 */
@@ -1239,13 +1284,13 @@ class elFinder {
 		$json = (isset($args['json']) && @json_decode($args['json']))? $args['json'] : '{}';
 		$bind  = (isset($args['bind']) && !preg_match($checkReg, $args['bind']))? $args['bind'] : '';
 		$done = (!empty($args['done']));
-	
+		
 		while( ob_get_level() ) {
 			if (! ob_end_clean()) {
 				break;
 			}
 		}
-	
+		
 		if ($done || ! $this->callbackWindowURL) {
 			$script = '';
 			if ($node) {
@@ -1267,30 +1312,56 @@ class elFinder {
 					}';
 			}
 			$script .= 'window.close();';
-				
+			
 			$out = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><script>'.$script.'</script></head><body><a href="#" onlick="window.close();return false;">Close this window</a></body></html>';
-				
+			
 			header('Content-Type: text/html; charset=utf-8');
 			header('Content-Length: '.strlen($out));
 			header('Cache-Control: private');
 			header('Pragma: no-cache');
-				
+			
 			echo $out;
-				
+			
 		} else {
 			$url = $this->callbackWindowURL;
 			$url .= ((strpos($url, '?') === false)? '?' : '&')
-			. '&node=' . rawurlencode($node)
-			. (($json !== '{}')? ('&json=' . rawurlencode($json)) : '')
-			. ($bind? ('&bind=' .  rawurlencode($bind)) : '')
-			. '&done=1';
-				
+				 . '&node=' . rawurlencode($node)
+				 . (($json !== '{}')? ('&json=' . rawurlencode($json)) : '')
+				 . ($bind? ('&bind=' .  rawurlencode($bind)) : '')
+				 . '&done=1';
+			
 			header('Location: ' . $url);
-				
+			
 		}
 		exit();
 	}
-	
+
+	/**
+	 * Edit on Pixlr.com
+	 *
+	 * @param  array  command arguments
+	 * @return array
+	 * @author Naoki Sawada
+	 **/
+	 protected function pixlr($args) {
+		
+		$out = array();
+		if (! empty($args['target'])) {
+			$args['upload'] = array( $args['image'] );
+			$args['name']   = array( preg_replace('/\.[a-z]{1,4}$/i', '', $args['title']).'.'.$args['type'] );
+			
+			$res = $this->upload($args);
+			
+			$out = array(
+				'node' => $args['node'],
+				'json' => json_encode($res),
+				'bind' => 'upload'
+			);
+		}
+		
+		return $this->callback($out);
+	}
+
 	/***************************************************************************/
 	/*                                   utils                                 */
 	/***************************************************************************/

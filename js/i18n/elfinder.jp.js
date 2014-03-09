@@ -121,6 +121,8 @@ if (elFinder && elFinder.prototype && typeof(elFinder.prototype.i18) == 'object'
 			'cmdnetmount'  : 'ネットワークボリュームをマウント', // added 18.04.2012
 			'cmdnetunmount': 'アンマウント', // added 30.04.2012
 			
+			'cmdpixlr'     : 'Pixlr で編集',
+			
 			/*********************************** buttons ***********************************/ 
 			'btnClose'  : '閉じる',
 			'btnSave'   : '保存',
