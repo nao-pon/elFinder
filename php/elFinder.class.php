@@ -1563,6 +1563,7 @@ class elFinder {
 				@ unlink($_temp);
 			}
 		}
+		$result['removed'] = $volume->removed();
 		return $result;
 	}
 		
