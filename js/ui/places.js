@@ -244,8 +244,7 @@ $.fn.elfinderplaces = function(fm, opts) {
 
 		// "on regist" for command exec
 		$(this).on('regist', function(e, files){
-			$.each(files, function(i, hash) {
-				var dir = fm.file(hash);
+			$.each(files, function(i, dir) {
 				if (dir && dir.mime == 'directory' && $.inArray(dir.hash, dirs) === -1) {
 					add(dir);
 				}
@@ -262,7 +261,7 @@ $.fn.elfinderplaces = function(fm, opts) {
 			
 			places.show().parent().show();
 
-			dirs = $.map(fm.storage('places').split(','), function(hash) { return hash || null});
+			dirs = $.map((fm.storage('places') || '').split(','), function(hash) { return hash || null;});
 			
 			if (dirs.length) {
 				root.prepend(spinner);
