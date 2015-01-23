@@ -1749,41 +1749,74 @@ abstract class elFinderVolumeDriver {
 		}
 		
 		$path = $this->decode($hash);
-		
 		if (!$this->canResize($path, $file)) {
 			return $this->setError(elFinder::ERROR_UNSUPPORT_TYPE);
+		}
+		
+		$work_path = $this->getWorkFile($path);
+		if (!$work_path || !is_writable($work_path)) {
+			if ($work_path && $path !== $work_path && is_file($work_path)) {
+				@unlink($work_path);
+			}
+			return false;
 		}
 
 		switch($mode) {
 			
 			case 'propresize':
-				$result = $this->imgResize($path, $width, $height, true, true);
+				$result = $this->imgResize($work_path, $width, $height, true, true);
 				break;
 
 			case 'crop':
-				$result = $this->imgCrop($path, $width, $height, $x, $y);
+				$result = $this->imgCrop($work_path, $width, $height, $x, $y);
 				break;
 
 			case 'fitsquare':
-				$result = $this->imgSquareFit($path, $width, $height, 'center', 'middle', ($bg ? $bg : $this->options['tmbBgColor']));
+				$result = $this->imgSquareFit($work_path, $width, $height, 'center', 'middle', ($bg ? $bg : $this->options['tmbBgColor']));
 				break;
 
 			case 'rotate':
-				$result = $this->imgRotate($path, $degree, ($bg ? $bg : $this->options['tmbBgColor']));
+				$result = $this->imgRotate($work_path, $degree, ($bg ? $bg : $this->options['tmbBgColor']));
 				break;
 
 			default:
-				$result = $this->imgResize($path, $width, $height, false, true);
+				$result = $this->imgResize($work_path, $width, $height, false, true);
 				break;
 		}
-
+		
+		$ret = false;
 		if ($result) {
-			$this->rmTmb($file);
-			$this->clearcache();
-			return $this->stat($path);
+			$stat = $this->stat($path);
+			clearstatcache();
+			$fstat = stat($work_path);
+			$stat['size'] = $fstat['size'];
+			$stat['ts'] = $fstat['mtime'];
+			if ($imgsize = @getimagesize($work_path)) {
+				$stat['width'] = $imgsize[0];
+				$stat['height'] = $imgsize[1];
+				$stat['mime'] = $imgsize['mime'];
+			}
+			if ($path !== $work_path) {
+				if ($fp = @fopen($work_path, 'rb')) {
+					$ret = $this->saveCE($fp, $this->dirnameCE($path), $this->basenameCE($path), $stat);
+					@fclose($fp);
+				}
+			} else {
+				$ret = true;
+			}
+			if ($ret) {
+				$this->rmTmb($file);
+				$this->clearcache();
+				$ret = $this->stat($path);
+				$ret['width'] = $stat['width'];
+				$ret['height'] = $stat['height'];
+			}
+		}
+		if ($path !== $work_path) {
+			is_file($work_path) && @unlink($work_path);
 		}
 		
-		return false;
+		return $ret;
 	}
 	
 	/**
@@ -2179,6 +2212,28 @@ abstract class elFinderVolumeDriver {
 	}
 	
 	/**
+	 * File path of local server side work file path
+	 * 
+	 * @param  string $path
+	 * @return string
+	 * @author Naoki Sawada
+	 */
+	protected function getWorkFile($path) {
+		$work = tempnam(sys_get_temp_dir(), 'elf');
+		if ($wfp = fopen($work, 'wb')) {
+			if ($fp = $this->_fopen($path)) {
+				while(!feof($fp)) {
+					fwrite($wfp, fread($fp, 8192));
+				}
+				$this->_fclose($fp, $path);
+				fclose($wfp);
+				return $work;
+			}
+		}
+		return false;
+	}
+	
+	/**
 	 * Return new unique name based on file name and suffix
 	 *
 	 * @param  string  $path    file path
@@ -2482,8 +2537,9 @@ abstract class elFinderVolumeDriver {
 				}
 				
 			}
-			if (!isset($stat['url']) && $this->encoding) {
-				$stat['url'] = rtrim($this->options['URL'], '/') . '/' . str_replace('%2F', '/', rawurlencode($this->convEncIn($path, true)));
+			if (!isset($stat['url']) && $this->URL && $this->encoding) {
+				$_path = str_replace($this->separator, '/', substr($path, strlen($this->root) + 1));
+				$stat['url'] = rtrim($this->URL, '/') . '/' . str_replace('%2F', '/', rawurlencode($this->convEncIn($_path, true)));
 			}
 		}
 		
@@ -2754,7 +2810,11 @@ abstract class elFinderVolumeDriver {
 			if ($this->stripos($name, $q) !== false) {
 				$stat['path'] = $this->path($p);
 				if ($this->URL && !isset($stat['url'])) {
-					$stat['url'] = $this->URL . str_replace($this->separator, '/', substr($p, strlen($this->root) + 1));
+					$path = str_replace($this->separator, '/', substr($p, strlen($this->root) + 1));
+					if ($this->encoding) {
+						$path = str_replace('%2F', '/', rawurlencode($this->convEncIn($path, true)));
+					}
+					$stat['url'] = $this->URL . $path;
 				}
 				
 				$result[] = $stat;
@@ -2992,11 +3052,12 @@ abstract class elFinderVolumeDriver {
 	 *
 	 * @param  string  $path  thumnbnail path 
 	 * @param  array   $stat  file stat
+	 * @param  bool    $checkTmbPath
 	 * @return string|bool
 	 * @author Dmitry (dio) Levashov
 	 **/
-	protected function canCreateTmb($path, $stat) {
-		return $this->tmbPathWritable 
+	protected function canCreateTmb($path, $stat, $checkTmbPath = true) {
+		return (!$checkTmbPath || $this->tmbPathWritable) 
 			&& strpos($path, $this->tmbPath) === false // do not create thumnbnail for thumnbnail
 			&& $this->imgLib 
 			&& strpos($stat['mime'], 'image') === 0 
@@ -3013,7 +3074,7 @@ abstract class elFinderVolumeDriver {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function canResize($path, $stat) {
-		return $this->canCreateTmb($path, $stat);
+		return $this->canCreateTmb($path, $stat, false);
 	}
 	
 	/**
