@@ -704,10 +704,14 @@ class elFinderVolumeFTP extends elFinderVolumeDriver {
 		
 		if ($this->tmp) {
 			$local = $this->tmp.DIRECTORY_SEPARATOR.md5($path);
-
-			if (ftp_get($this->connect, $local, $path, FTP_BINARY)) {
-				return @fopen($local, $mode);
+			$fp = @fopen($local, 'wb');
+			if (ftp_fget($this->connect, $fp, $path, FTP_BINARY)) {
+				fclose($fp);
+				$fp = fopen($local, $mode);
+				return $fp;
 			}
+			@fclose($fp);
+			is_file($local) && @unlink($local);
 		}
 		
 		return false;
