@@ -772,7 +772,7 @@ abstract class elFinderVolumeDriver {
 			$this->tmbURL .= '/';
 		}
 		
-		$this->nameValidator = is_string($this->options['acceptedName']) && !empty($this->options['acceptedName']) 
+		$this->nameValidator = !empty($this->options['acceptedName']) && (is_string($this->options['acceptedName']) || is_callable($this->options['acceptedName']))
 			? $this->options['acceptedName']
 			: '';
 
@@ -1978,7 +1978,7 @@ abstract class elFinderVolumeDriver {
 	}
 	
 	/**
-	 * Validate file name based on $this->options['acceptedName'] regexp
+	 * Validate file name based on $this->options['acceptedName'] regexp or function
 	 *
 	 * @param  string  $name  file name
 	 * @return bool
