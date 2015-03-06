@@ -491,6 +491,13 @@ abstract class elFinderVolumeDriver {
 	 **/
 	protected $dirsCache = array();
 	
+	/**
+	 * Reference of $_SESSION[elFinder::$sessionCacheKey][$this->id]
+	 * 
+	 * @var array
+	 */
+	protected $sessionCache;
+	
 	/*********************************************************************/
 	/*                            INITIALIZATION                         */
 	/*********************************************************************/
@@ -609,6 +616,14 @@ abstract class elFinderVolumeDriver {
 		} else {
 			$this->encoding = null;
 		}
+		
+		$argInit = ($_SERVER['REQUEST_METHOD'] === 'POST')? !empty($_POST['init']) : !empty($_GET['init']);
+		
+		// session cache
+		if ($argInit || ! isset($_SESSION[elFinder::$sessionCacheKey][$this->id])) {
+			$_SESSION[elFinder::$sessionCacheKey][$this->id] = array();
+		}
+		$this->sessionCache = &$_SESSION[elFinder::$sessionCacheKey][$this->id];
 		
 		// default file attribute
 		$this->defaults = array(
@@ -2480,12 +2495,22 @@ abstract class elFinderVolumeDriver {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function stat($path) {
-		if ($path === false) {
+		if ($path === false || is_null($path)) {
 			return false;
 		}
-		return isset($this->cache[$path])
+		$is_root = ($path === $this->root);
+		if ($is_root) {
+			if (isset($this->sessionCache['rootstat'])) {
+				return $this->cache[$path] = unserialize(base64_decode($this->sessionCache['rootstat']));
+			}
+		}
+		$ret = isset($this->cache[$path])
 			? $this->cache[$path]
 			: $this->updateCache($path, $this->convEncOut($this->_stat($this->convEncIn($path))));
+		if ($is_root) {
+			$this->sessionCache['rootstat'] = base64_encode(serialize($ret));
+		}
+		return $ret;
 	}
 	
 	/**
@@ -3689,8 +3714,9 @@ abstract class elFinderVolumeDriver {
 			return $arcs;
 		}
 		
-		if ($use_cache && isset($_SESSION['ELFINDER_ARCHIVERS_CACHE']) && is_array($_SESSION['ELFINDER_ARCHIVERS_CACHE'])) {
-			return $_SESSION['ELFINDER_ARCHIVERS_CACHE'];
+		$sessionKey = $_SESSION[elFinder::$sessionCacheKey . ':ARCHIVERS_CACHE'];
+		if ($use_cache && isset($_SESSION[$sessionKey]) && is_array($_SESSION[$sessionKey])) {
+			return $_SESSION[$sessionKey];
 		}
 		
 		$this->procExec('tar --version', $o, $ctar);
@@ -3780,7 +3806,7 @@ abstract class elFinderVolumeDriver {
 			}
 		}
 		
-		$_SESSION['ELFINDER_ARCHIVERS_CACHE'] = $arcs;
+		$_SESSION[$sessionKey] = $arcs;
 		return $arcs;
 	}
 
