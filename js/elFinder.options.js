@@ -326,7 +326,7 @@ elFinder.prototype._options = {
 			listView : {
 				// name is always displayed, cols are ordered
 				// ex. ['perm', 'date', 'size', 'kind', 'owner', 'group', 'mode']
-				// mode: FileMode '0755', '755', or 'rwxr-xr-x' etc...
+				// mode: 'mode'(by `fileModeStyle` setting), 'modestr'(rwxr-xr-x) , 'modeoct'(755), 'modeboth'(rwxr-xr-x (755))
 				// 'owner', 'group' and 'mode', It's necessary set volume driver option "statOwner" to `true`
 				columns : ['perm', 'date', 'size', 'kind'],
 				// override this if you want custom columns name
@@ -424,6 +424,15 @@ elFinder.prototype._options = {
 	 * @example "$1 H:m:i"
 	 */
 	fancyDateFormat : '',
+	
+	/**
+	 * Style of file mode at cwd-list, info dialog
+	 * 'string' (ex. rwxr-xr-x) or 'octal' (ex. 755) or 'both' (ex. rwxr-xr-x (755))
+	 * 
+	 * @type {String}
+	 * @default 'both'
+	 */
+	fileModeStyle : 'both',
 	
 	/**
 	 * elFinder width
@@ -572,15 +581,6 @@ elFinder.prototype._options = {
 		// system use only
 		cmdMaps: {}
 	},
-
-	/**
-	 * Style of file mode at cwd-list, info dialog
-	 * 'string' (ex. rwxr-xr-x) or 'octal' (ex. 755)
-	 * 
-	 * @type {String}
-	 * @default 'string'
-	 */
-	fileModeStyle : 'string',
 
 	/**
 	 * Debug config
