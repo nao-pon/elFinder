@@ -297,8 +297,8 @@ class elFinder {
 		}
 
 		// check for net volumes stored in session
-		foreach ($this->getNetVolumes() as $root) {
-			$opts['roots'][] = $root;
+		foreach ($this->getNetVolumes() as $key => $root) {
+			$opts['roots'][$key] = $root;
 		}
 
 		// "mount" volumes
@@ -318,11 +318,11 @@ class elFinder {
 							$this->default = $this->volumes[$id]; 
 						}
 					} else {
-						$this->removeNetVolume($volume);
+						$this->removeNetVolume($i);
 						$this->mountErrors[] = 'Driver "'.$class.'" : '.implode(' ', $volume->error());
 					}
 				} catch (Exception $e) {
-					$this->removeNetVolume($volume);
+					$this->removeNetVolume($i);
 					$this->mountErrors[] = 'Driver "'.$class.'" : '.$e->getMessage();
 				}
 			} else {
@@ -597,14 +597,11 @@ class elFinder {
 	/**
 	 * Remove netmount volume
 	 * 
-	 * @param object $volume
+	 * @param string $key  netvolume key
 	 */
-	protected function removeNetVolume($volume) {
+	protected function removeNetVolume($key) {
 		$netVolumes = $this->getNetVolumes();
-		if (! $key = @ $volume->netMountKey) {
-			$key = md5($protocol . '-' . join('-', $options));
-		}
-		if (isset($netVolumes[$key])) {
+		if (is_string($key) && isset($netVolumes[$key])) {
 			unset($netVolumes[$key]);
 			$this->saveNetVolumes($netVolumes);
 		}
