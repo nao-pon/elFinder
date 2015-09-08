@@ -111,6 +111,9 @@ class elFinderConnector {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function output(array $data) {
+		// clear output buffer
+		while(@ob_get_level()){ @ob_end_clean(); }
+		
 		$header = isset($data['header']) ? $data['header'] : $this->header;
 		unset($data['header']);
 		if ($header) {
@@ -165,7 +168,7 @@ class elFinderConnector {
 			}
 
 			// unlock session data for multiple access
-			(session_status() === PHP_SESSION_ACTIVE) && session_write_close();
+			session_id() && session_write_close();
 			// client disconnect should abort
 			ignore_user_abort(false);
 
