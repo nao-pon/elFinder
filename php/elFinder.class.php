@@ -2170,22 +2170,23 @@ class elFinder {
 	 * @author Naoki Sawada
 	 **/
 	 protected function pixlr($args) {
-		
+
 		$out = array();
 		if (! empty($args['target'])) {
 			$args['upload'] = array( $args['image'] );
 			$args['name']   = array( preg_replace('/\.[a-z]{1,4}$/i', '', $args['title']).'.'.$args['type'] );
-			
+				
 			$res = $this->upload($args);
-			
-			$out = array(
+				
+			$res['callback'] = array(
 				'node' => $args['node'],
-				'json' => json_encode($res),
 				'bind' => 'upload'
 			);
+		} else {
+			$res = array('error' => $this->error(self::ERROR_UPLOAD_NO_FILES));
 		}
 		
-		return $this->callback($out);
+		return $res;
 	}
 
 	/***************************************************************************/
