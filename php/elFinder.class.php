@@ -1699,6 +1699,12 @@ class elFinder {
 				foreach($args['name'] as $_i => $_name) {
 					$result['name'][$_i] = preg_replace($ngReg, '_', $_name);
 				}
+				$result = array_merge_recursive($result, $this->ls($args));
+				if (empty($result['list'])) {
+					$result['name'] = array();
+				} else {
+					$result['name'] = array_merge(array_intersect($result['name'], $result['list']));
+				}
 				return $result;
 			}
 			if (isset($args['upload']) && is_array($args['upload']) && ($tempDir = $this->getTempDir($volume->getTempPath()))) {
