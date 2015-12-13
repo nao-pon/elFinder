@@ -24,6 +24,7 @@ Contents
 * [FAQs](#faqs)
 * [3rd Party Connectors](#3rd-party-connectors)
 * [3rd Party Volume Drivers](#3rd-party-volume-drivers)
+* [3rd Party Themes](#3rd-party-themes)
 * [Support](#support)
 * [Authors](#authors)
 * [License](#license)
@@ -103,7 +104,7 @@ Installation
 Downloads
 ------------
 **Stable releases**
- + [elFinder 2.1.2](https://github.com/Studio-42/elFinder/archive/2.1.2.zip)
+ + [elFinder 2.1.3](https://github.com/Studio-42/elFinder/archive/2.1.3.zip)
  + [elFinder 2.0.4](https://github.com/Studio-42/elFinder/archive/2.0.4.zip)
 
 **Nightly builds**
@@ -152,6 +153,11 @@ You can create or modify the language file to use translation tool. Please refer
 3rd party Volume Drivers
 --------------------
  * [League\Flysystem (PHP)](https://github.com/barryvdh/elfinder-flysystem-driver) (for elFinder 2.1+)
+
+3rd party Themes
+--------------------
+ * [lokothodida/elfinder-theme-moono](https://github.com/lokothodida/elfinder-theme-moono)
+ * [lokothodida/elfinder-theme-windows-10](https://github.com/lokothodida/elfinder-theme-windows-10)
 
 Support
 -------
