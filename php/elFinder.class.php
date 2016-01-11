@@ -2147,9 +2147,10 @@ class elFinder {
 		$target = !empty($args['target'])? $args['target'] : null;
 		$result = array();
 
-		if (!is_null($target)) {
-			$volume = $this->volume($target);
-			$result = $volume->search($q, $mimes, $target);
+		if ($target) {
+			if ($volume = $this->volume($target)) {
+				$result = $volume->search($q, $mimes, $target);
+			}
 		} else {
 			foreach ($this->volumes as $volume) {
 				$result = array_merge($result, $volume->search($q, $mimes));
