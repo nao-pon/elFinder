@@ -153,7 +153,7 @@ class elFinder {
 	protected $sessionCloseEarlier = true;
 
 	/**
-	 * SESSION use commands default is `netmount`, `netunmount` @see __construct()
+	 * SESSION use commands @see __construct()
 	 * 
 	 * @var array
 	 */
@@ -267,10 +267,11 @@ class elFinder {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	public function __construct($opts) {
-		if (session_id() == '') {
+		// try session start | restart
+		try {
 			session_start();
-		}
-		$sessionUseCmds = array('netmount', 'netunmount');
+		} catch (Exception $e) {}
+		
 		if (isset($opts['sessionUseCmds']) && is_array($opts['sessionUseCmds'])) {
 			$sessionUseCmds = array_merge($sessionUseCmds, $opts['sessionUseCmds']);
 		}
@@ -549,7 +550,6 @@ class elFinder {
 		
 		// unlock session data for multiple access
 		$this->sessionCloseEarlier && $args['sessionCloseEarlier'] && session_id() && session_write_close();
-		unset($this->sessionCloseEarlier);
 		
 		if (substr(PHP_OS,0,3) === 'WIN') {
 			// set time out
@@ -723,6 +723,11 @@ class elFinder {
 	}
 	
 	protected function netmount($args) {
+		// try session restart
+		try {
+			session_start();
+		} catch (Exception $e) {}
+		
 		$options  = array();
 		$protocol = $args['protocol'];
 		
@@ -838,7 +843,7 @@ class elFinder {
 
 		$files = array();
 
-		// get folders trees
+		// get other volume root
 		if ($tree) {
 			foreach ($this->volumes as $id => $v) {
 				$files[] = $v->file($v->root());
