@@ -269,9 +269,7 @@ class elFinder {
 	 **/
 	public function __construct($opts) {
 		// try session start | restart
-		try {
-			session_start();
-		} catch (Exception $e) {}
+		@session_start();
 		
 		$sessionUseCmds = array();
 		if (isset($opts['sessionUseCmds']) && is_array($opts['sessionUseCmds'])) {
@@ -726,9 +724,7 @@ class elFinder {
 	
 	protected function netmount($args) {
 		// try session restart
-		try {
-			session_start();
-		} catch (Exception $e) {}
+		@session_start();
 		
 		$options  = array();
 		$protocol = $args['protocol'];
