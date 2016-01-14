@@ -47,6 +47,13 @@ class elFinder {
 	public static $sessionCacheKey = '';
 	
 	/**
+	 * Is session closed
+	 * 
+	 * @var bool
+	 */
+	private static $sessionClosed = false;
+	
+	/**
 	 * elFinder base64encodeSessionData
 	 * elFinder save session data as `UTF-8`
 	 * If the session storage mechanism of the system does not allow `UTF-8`
@@ -549,7 +556,10 @@ class elFinder {
 		}
 		
 		// unlock session data for multiple access
-		$this->sessionCloseEarlier && $args['sessionCloseEarlier'] && session_id() && session_write_close();
+		if ($this->sessionCloseEarlier && $args['sessionCloseEarlier'] && session_id()) {
+			session_write_close();
+			elFinder::$sessionClosed = true;
+		}
 		
 		if (substr(PHP_OS,0,3) === 'WIN') {
 			// set time out
@@ -2568,5 +2578,16 @@ class elFinder {
 			return false;
 		}
 		return $data;
+	}
+	
+	/**
+	 * Call session_write_close() if session is restarted
+	 * 
+	 * @return void
+	 */
+	public static function sessionWrite() {
+		if (elFinder::$sessionClosed) {
+			session_write_close();
+		}
 	}
 } // END class
