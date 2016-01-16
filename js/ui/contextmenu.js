@@ -10,11 +10,15 @@ $.fn.elfindercontextmenu = function(fm) {
 		var self   = $(this),
 			cmItem = 'elfinder-contextmenu-item',
 			smItem = 'elfinder-contextsubmenu-item',
+			exIcon = 'elfinder-contextmenu-extra-icon',
 			menu = self.addClass('ui-helper-reset ui-widget ui-state-default ui-corner-all elfinder-contextmenu elfinder-contextmenu-'+fm.direction)
 				.hide()
 				.appendTo('body')
-				.on('mouseenter mouseleave', '.'+cmItem, function() {
-					$(this).toggleClass('ui-state-hover')
+				.on('mouseenter mouseleave', '.'+cmItem, function(e) {
+					$(this).toggleClass('ui-state-hover', e.type === 'mouseenter');
+				})
+				.on('mouseenter mouseleave', '.'+exIcon, function(e) {
+					$(this).parent().toggleClass('ui-state-hover', e.type === 'mouseleave');
 				})
 				.on('contextmenu', function(){return false;}),
 			subpos  = fm.direction == 'ltr' ? 'left' : 'right',
@@ -39,10 +43,9 @@ $.fn.elfindercontextmenu = function(fm) {
 					scrolltop  = win.scrollTop(),
 					scrollleft = win.scrollLeft(),
 					m          = fm.UA.Touch? 10 : 0,
-					zoom       = !window.innerWidth? 1 : document.body.clientWidth / window.innerWidth,
 					css        = {
-						top  : ((y + m + height < wheight ? y + m : y - m - height > 0 ? y - m - height : y + m) + scrolltop) / zoom,
-						left : ((x + m + width  < wwidth  ? x + m : x - m - width) / zoom + scrollleft) / zoom,
+						top  : y - scrolltop + m + height < wheight ? y + m : (y - m - height > 0 ? y - m - height : y + m),
+						left : x - scrollleft + m + width < wwidth  ? x + m :  x - m - width,
 						'z-index' : 100 + fm.getUI('workzone').zIndex()
 					};
 
