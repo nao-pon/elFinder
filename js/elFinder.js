@@ -1028,8 +1028,14 @@ window.elFinder = function(node, opts) {
 			return '';
 		}
 		
-		if (!download && file.url && file.url != 1) {
-			return file.url;
+		if (!download) {
+			if (file.url) {
+				if (file.url != 1) {
+					return file.url;
+				}
+			} else if (cwdOptions.url) {
+				return cwdOptions.url + $.map(this.path2array(hash), function(n) { return encodeURIComponent(n); }).slice(1).join('/');
+			}
 		}
 		
 		url = this.options.url;
@@ -3716,12 +3722,20 @@ elFinder.prototype = {
 	 * @return String
 	 */
 	localStorage : function(key, val) {
-		var s = window.localStorage;
+		var s      = window.localStorage,
+			oldkey = 'elfinder-'+key+this.id, // old key of elFinder < 2.1.6
+			retval, oldval;
 
-		key = 'elfinder-'+key+this.id;
+		// new key of elFinder >= 2.1.6
+		key = window.location.pathname+'-elfinder-'+key+this.id;
 		
 		if (val === null) {
 			return s.removeItem(key);
+		}
+		
+		if (val === void(0) && !(retval = s.getItem(key)) && (oldval = s.getItem(oldkey))) {
+			val = oldval;
+			s.removeItem(oldkey);
 		}
 		
 		if (val !== void(0)) {
@@ -3731,9 +3745,10 @@ elFinder.prototype = {
 				s.clear();
 				s.setItem(key, val);
 			}
+			retval = s.getItem(key);
 		}
 
-		return s.getItem(key);
+		return retval;
 	},
 	
 	/**
