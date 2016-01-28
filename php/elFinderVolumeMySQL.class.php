@@ -144,6 +144,9 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
 			
 			$this->tmpPath = is_dir($tmp) && is_writable($tmp) ? $tmp : false;
 		}
+		if (!$this->tmpPath && ($tmp = elFinder::getStaticVar('commonTempPath'))) {
+			$this->tmpPath = $tmp;
+		}
 		
 		if (!$this->tmpPath && $this->tmbPath && $this->tmbPathWritable) {
 			$this->tmpPath = $this->tmbPath;
@@ -399,7 +402,7 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function _dirname($path) {
-		return ($stat = $this->stat($path)) ? ($stat['phash'] ? $this->decode($stat['phash']) : $this->root) : false;
+		return ($stat = $this->stat($path)) ? (!empty($stat['phash']) ? $this->decode($stat['phash']) : $this->root) : false;
 	}
 
 	/**
@@ -482,7 +485,7 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
 			$dir = $this->stat($id);
 			$path .= $dir['name'].$this->separator;
 		}
-		return $this->rootName.$this->separator.$path.$file['name'];
+		return $path.$file['name'];
 	}
 	
 	/**

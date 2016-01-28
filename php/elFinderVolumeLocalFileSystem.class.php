@@ -64,7 +64,6 @@ class elFinderVolumeLocalFileSystem extends elFinderVolumeDriver {
 		$this->options['dirMode']  = 0755;            // new dirs mode
 		$this->options['fileMode'] = 0644;            // new files mode
 		$this->options['quarantine'] = '.quarantine';  // quarantine folder name - required to check archive (must be hidden)
-		$this->options['maxArcFilesSize'] = 0;        // max allowed archive files size (0 - no limit)
 		$this->options['rootCssClass'] = 'elfinder-navbar-root-local';
 	}
 	
@@ -136,10 +135,14 @@ class elFinderVolumeLocalFileSystem extends elFinderVolumeDriver {
 		parent::configure();
 		
 		// set $this->tmp by options['tmpPath']
+		$this->tmp = '';
 		if (!empty($this->options['tmpPath'])) {
 			if ((is_dir($this->options['tmpPath']) || @mkdir($this->options['tmpPath'], 0755, true)) && is_writable($this->options['tmpPath'])) {
 				$this->tmp = $this->options['tmpPath'];
 			}
+		}
+		if (!$this->tmp && ($tmp = elFinder::getStaticVar('commonTempPath'))) {
+			$this->tmp = $tmp;
 		}
 		
 		// if no thumbnails url - try detect it
@@ -211,7 +214,8 @@ class elFinderVolumeLocalFileSystem extends elFinderVolumeDriver {
 		if ($r === 0) {
 			// changed
 			clearstatcache();
-			return filemtime($path);
+			$mtime = @filemtime($path); // error on busy?
+			return $mtime? $mtime : time();
 		} else if ($r === 2) {
 			// not changed (timeout)
 			return $compare;
