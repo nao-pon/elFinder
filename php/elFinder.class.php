@@ -2503,7 +2503,10 @@ class elFinder {
 				'bind' => 'upload'
 			);
 		} else {
-			$res = array('error' => $this->error(self::ERROR_UPLOAD_NO_FILES));
+			$res = array(
+				'error'    => $this->error(self::ERROR_UPLOAD_NO_FILES),
+				'callback' => array('node' => $args['node'])
+			);
 		}
 		
 		return $res;
