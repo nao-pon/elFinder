@@ -188,14 +188,7 @@ class elFinderVolumeMsSQL extends elFinderVolumeDriver {
 	 * @return misc
 	 * @author Dmitry (dio) Levashov
 	 **/
-	protected function query($sql) {
-	 /**
-	 * increase mssql or odbc data size limit
-	 **/
-		ini_set("mssql.textlimit","2147483647");
-		ini_set("mssql.textsize","2147483647");
-		ini_set("odbc.defaultlrl","214748364");
-
+	protected function query($sql) {	 
 		$this->sqlCnt++;
 		$sql = str_replace(utf8_encode('"'), "'", $sql);
 		$res = odbc_exec($this->conn, $sql);
@@ -613,8 +606,14 @@ class elFinderVolumeMsSQL extends elFinderVolumeDriver {
 			: @tmpfile();
 
 		if ($fp) {
-			$sql = 'SELECT convert(varbinary(max),content) as content FROM '.$this->tbf.' WHERE id="'.$path.'"';
+			$sql = "SET TEXTSIZE 2147483647 ";   // increase mssql or odbc data size limit
+			$sql .= 'SELECT convert(varbinary(max),content) as content FROM '.$this->tbf.' WHERE id="'.$path.'"';			
+			
 			$res = $this->query($sql);
+			
+			odbc_binmode($res, ODBC_BINMODE_RETURN);   //long binary handling
+			odbc_longreadlen($res,500000000);		   //increase mssql or odbc data size 500 Megabytes
+			
 			if ($res && ($r = odbc_fetch_array($res))) {				
 				fwrite($fp, base64_decode($r['content']));
 				rewind($fp);
@@ -841,8 +840,14 @@ class elFinderVolumeMsSQL extends elFinderVolumeDriver {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function _getContents($path) {
-		$sql = sprintf('SELECT convert(varbinary(max),content) as content FROM %s WHERE id=%d', $this->tbf, $path);
+		$sql = "SET TEXTSIZE 2147483647 ";   // increase mssql or odbc data size limit
+		$sql .= sprintf('SELECT convert(varbinary(max),content) as content FROM %s WHERE id=%d', $this->tbf, $path);
+				
 		$res = $this->query($sql);
+		
+		odbc_binmode($res, ODBC_BINMODE_RETURN);   //long binary handling
+		odbc_longreadlen($res,500000000);		   //increase mssql or odbc data size 500 Megabytes
+		
 		$r = odbc_fetch_array($res);
 		return ($res) && ($r) ? base64_decode($r['content']) : false;
 	}
@@ -1043,3 +1048,4 @@ class elFinderVolumeMsSQL extends elFinderVolumeDriver {
 	}
 
 } // END class
+
