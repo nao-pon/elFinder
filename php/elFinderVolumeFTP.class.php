@@ -695,7 +695,12 @@ class elFinderVolumeFTP extends elFinderVolumeDriver {
 				return $res;
 			}
 			$this->cacheDir($this->convEncOut($this->_dirname($path)));
-			return $this->convEncIn(isset($this->cache[$outPath])? $this->cache[$outPath] : array());
+			$stat = $this->convEncIn(isset($this->cache[$outPath])? $this->cache[$outPath] : array());
+			if (! $this->mounted) {
+				// dispose incomplete cache made by calling `stat` by 'startPath' option
+				$this->cache = array();
+			}
+			return $stat;
 		}
 		$raw = ftp_raw($this->connect, 'MLST ' . $path);
 		if (is_array($raw) && count($raw) > 1 && substr(trim($raw[0]), 0, 1) == 2) {
@@ -1121,17 +1126,15 @@ class elFinderVolumeFTP extends elFinderVolumeDriver {
 			return true;
 		}
 		if (is_dir($path)) {
-			foreach (scandir($path) as $name) {
-				if ($name != '.' && $name != '..') {
-					$p = $path.DIRECTORY_SEPARATOR.$name;
-					if (is_link($p)) {
-						return true;
-					}
-					if (is_dir($p) && $this->_findSymlinks($p)) {
-						return true;
-					} elseif (is_file($p)) {
-						$this->archiveSize += sprintf('%u', filesize($p));
-					}
+			foreach (self::localScandir($path) as $name) {
+				$p = $path.DIRECTORY_SEPARATOR.$name;
+				if (is_link($p)) {
+					return true;
+				}
+				if (is_dir($p) && $this->_findSymlinks($p)) {
+					return true;
+				} elseif (is_file($p)) {
+					$this->archiveSize += sprintf('%u', filesize($p));
 				}
 			}
 		} else {
@@ -1472,7 +1475,7 @@ class elFinderVolumeFTP extends elFinderVolumeDriver {
 		}
 		$excludes = array(".","..");
 		$result = array();
-		$files = scandir($dir);
+		$files = self::localScandir($dir);
 		if(!$files) {
 			return array();
 		}
