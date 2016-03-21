@@ -26,10 +26,10 @@ class elFinderVolumeFlysystemGoogleDriveNetmount extends \Barryvdh\elFinderFlysy
         parent::__construct();
         
         $opts = array(
-            'cacheDir'     => __DIR__ . '/.tmp',
-            'cachePrefix'  => 'gd-',
-            'cacheExpire'  => 600,
-            'rootCssClass' => 'elfinder-navbar-root-googledrive'
+            'rootCssClass' => 'elfinder-navbar-root-googledrive',
+            'gdCacheDir'     => __DIR__ . '/.tmp',
+            'gdCachePrefix'  => 'gd-',
+            'gdCacheExpire'  => 600,
         );
 
         $this->options = array_merge($this->options, $opts);
@@ -156,7 +156,7 @@ class elFinderVolumeFlysystemGoogleDriveNetmount extends \Barryvdh\elFinderFlysy
      */
     public function netunmount($netVolumes, $key)
     {
-        $cache = $this->options['cacheDir'] . DIRECTORY_SEPARATOR . $this->options['cachePrefix'].$this->netMountKey;
+        $cache = $this->options['gdCacheDir'] . DIRECTORY_SEPARATOR . $this->options['gdCachePrefix'].$this->netMountKey;
         if (file_exists($cache) && is_writeable($cache)) {
             unlink($cache);
         }
@@ -200,9 +200,9 @@ class elFinderVolumeFlysystemGoogleDriveNetmount extends \Barryvdh\elFinderFlysy
         $googleDrive = new GoogleDriveAdapter($service, $opts['path'], [ 'useHasDir' => true ]);
 
         $opts['fscache'] = null;
-        if ($this->options['cacheDir'] && is_writeable($this->options['cacheDir'])) {
-            if ($this->options['cacheExpire']) {
-                $opts['fscache'] = new elFinderVolumeFlysystemGoogleDriveCache(new Local($this->options['cacheDir']), $this->options['cachePrefix'].$this->netMountKey, $this->options['cacheExpire']);
+        if ($this->options['gdCacheDir'] && is_writeable($this->options['gdCacheDir'])) {
+            if ($this->options['gdCacheExpire']) {
+                $opts['fscache'] = new elFinderVolumeFlysystemGoogleDriveCache(new Local($this->options['gdCacheDir']), $this->options['gdCachePrefix'].$this->netMountKey, $this->options['gdCacheExpire']);
             }
         }
         if ($opts['fscache']) {
