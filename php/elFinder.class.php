@@ -272,7 +272,7 @@ class elFinder {
 	const ERROR_UPLOAD_FILE_MIME  = 'errUploadMime';       // 'File type not allowed.'
 	const ERROR_UPLOAD_TRANSFER   = 'errUploadTransfer';   // '"$1" transfer error.'
 	const ERROR_UPLOAD_TEMP       = 'errUploadTemp';       // 'Unable to make temporary file for upload.'
-	// const ERROR_ACCESS_DENIED     = 'errAccess';
+	const ERROR_ACCESS_DENIED     = 'errAccess';
 	const ERROR_NOT_REPLACE       = 'errNotReplace';       // Object "$1" already exists at this location and can not be replaced with object of another type.
 	const ERROR_SAVE              = 'errSave';
 	const ERROR_EXTRACT           = 'errExtract';
@@ -299,6 +299,7 @@ class elFinder {
 	const ERROR_ARCHIVE_EXEC 	= 'errArchiveExec';
 	const ERROR_EXTRACT_EXEC 	= 'errExtractExec';
 	const ERROR_SEARCH_TIMEOUT    = 'errSearchTimeout';    // 'Timed out while searching "$1". Search result is partial.'
+	const ERROR_REAUTH_REQUIRE  = 'errReauthRequire';  // 'Re-authorization is required.'
 
 	/**
 	 * Constructor
@@ -437,11 +438,11 @@ class elFinder {
 							$this->default = $this->volumes[$id]; 
 						}
 					} else {
-						$this->removeNetVolume($i);
+						$this->removeNetVolume($i, $volume);
 						$this->mountErrors[] = 'Driver "'.$class.'" : '.implode(' ', $volume->error());
 					}
 				} catch (Exception $e) {
-					$this->removeNetVolume($i);
+					$this->removeNetVolume($i, $volume);
 					$this->mountErrors[] = 'Driver "'.$class.'" : '.$e->getMessage();
 				}
 			} else {
@@ -755,14 +756,23 @@ class elFinder {
 	/**
 	 * Remove netmount volume
 	 * 
-	 * @param string $key  netvolume key
+	 * @param string $key     netvolume key
+	 * @param object $volume  volume driver instance
 	 */
-	protected function removeNetVolume($key) {
+	protected function removeNetVolume($key, $volume) {
 		$netVolumes = $this->getNetVolumes();
-		if (is_string($key) && isset($netVolumes[$key])) {
-			unset($netVolumes[$key]);
-			$this->saveNetVolumes($netVolumes);
+		$res = true;
+		if (is_object($volume) && method_exists($volume, 'netunmount')) {
+			$res = $volume->netunmount($netVolumes, $key);
 		}
+		if ($res) {
+			if (is_string($key) && isset($netVolumes[$key])) {
+				unset($netVolumes[$key]);
+				$this->saveNetVolumes($netVolumes);
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -817,21 +827,12 @@ class elFinder {
 		$protocol = $args['protocol'];
 		
 		if ($protocol === 'netunmount') {
-			$key = $args['host'];
-			$netVolumes = $this->getNetVolumes();
-			if ($netVolumes[$key]) {
-				$res = true;
-				$volume = $this->volume($args['user']);
-				if (method_exists($volume, 'netunmount')) {
-					$res = $volume->netunmount($netVolumes, $key);
-				}
-				if ($res) {
-					unset($netVolumes[$key]);
-					$this->saveNetVolumes($netVolumes);
+			if (! empty($args['user']) && $volume = $this->volume($args['user'])) {
+				if ($this->removeNetVolume($args['host'], $volume)) {
 					return array('sync' => true);
 				}
 			}
-			return array('error' => $this->error(self::ERROR_NETUNMOUNT));
+			return array('sync' => true, 'error' => $this->error(self::ERROR_NETUNMOUNT));
 		}
 		
 		$driver   = isset(self::$netDrivers[$protocol]) ? self::$netDrivers[$protocol] : '';
@@ -877,6 +878,10 @@ class elFinder {
 			if (! $key = @ $volume->netMountKey) {
 				$key = md5($protocol . '-' . join('-', $options));
 			}
+			if (isset($netVolumes[$key])) {
+				$volume->umount();
+				return array('error' => $this->error(self::ERROR_EXISTS, isset($options['alias'])? $options['alias'] : $options['path']));
+			}
 			$options['driver'] = $driver;
 			$options['netkey'] = $key;
 			$netVolumes[$key]  = $options;
@@ -885,7 +890,7 @@ class elFinder {
 			$rootstat['netkey'] = $key;
 			return array('added' => array($rootstat));
 		} else {
-			$this->removeNetVolume($volume);
+			$this->removeNetVolume(null, $volume);
 			return array('error' => $this->error(self::ERROR_NETMOUNT, $args['host'], implode(' ', $volume->error())));
 		}
 	}
@@ -937,7 +942,7 @@ class elFinder {
 			}
 		}
 
-		// get current working directory files list and add to $files if not exists in it
+		// get current working directory files list
 		if (($ls = $volume->scandir($cwd['hash'])) === false) {
 			return array('error' => $this->error(self::ERROR_OPEN, $cwd['name'], $volume->error()));
 		}
@@ -977,7 +982,6 @@ class elFinder {
 		if ($ls) {
 			if ($files) {
 				$files = array_merge($files, $ls);
-				$files = array_values(array_unique($files, SORT_REGULAR));
 			} else {
 				$files = $ls;
 			}
@@ -1949,6 +1953,8 @@ class elFinder {
 				if (empty($result['list'])) {
 					$result['name'] = array();
 				} else {
+					// It is using the old(<=2.1.6) JavaScript in the new(>2.1.6) back-end?
+					unset($result['list']['exists'], $result['list']['hashes']);
 					$result['name'] = array_merge(array_intersect($result['name'], $result['list']));
 				}
 				return $result;
