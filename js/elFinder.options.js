@@ -305,6 +305,7 @@ elFinder.prototype._options = {
 		
 		netmount: {
 			ftp: {
+				name : 'FTP',
 				inputs: {
 					host     : $('<input type="text"/>'),
 					port     : $('<input type="text" placeholder="21"/>'),
@@ -316,6 +317,7 @@ elFinder.prototype._options = {
 				}
 			},
 			dropbox: {
+				name : 'Dropbox.com',
 				inputs: {
 					host     : $('<span><span class="elfinder-info-spinner"/></span></span><input type="hidden"/>'),
 					path     : $('<input type="text" value="/"/>'),
@@ -350,6 +352,7 @@ elFinder.prototype._options = {
 				}
 			},
 			googledrive: {
+				name : 'GoogleDrive',
 				inputs: {
 					offline  : $('<input type="checkbox"/>').on('change', function() {
 						$(this).parents('table.elfinder-netmount-tb').find('select:first').trigger('change', 'reset');
@@ -403,9 +406,9 @@ elFinder.prototype._options = {
 							}));
 						$(f.host[1]).val('googledrive');
 						if (data.folders) {
-							f.path.after(
+							f.path.next().remove().end().after(
 								$('<div/>').append(
-									$('<select style="max-width:200px;">').append(
+									$('<select class="ui-corner-all" style="max-width:200px;">').append(
 										$($.map(data.folders, function(n,i){return '<option value="'+i+'">'+fm.escape(n)+'</option>'}).join(''))
 									).on('change', function(){f.path.val($(this).val());})
 								)
