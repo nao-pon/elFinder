@@ -412,7 +412,15 @@ class elFinder {
 		}
 
 		// check for net volumes stored in session
-		foreach ($this->getNetVolumes() as $key => $root) {
+		$netVolumes = $this->getNetVolumes();
+		foreach ($netVolumes as $key => $root) {
+			if (! isset($root['id'])) {
+				// given fixed unique id
+				if (! $root['id'] = $this->getNetVolumeUniqueId($netVolumes)) {
+					$this->mountErrors[] = 'Netmount Driver "'.$root['driver'].'" : Could\'t given volume id.';
+					continue;
+				}
+			}
 			$opts['roots'][$key] = $root;
 		}
 
@@ -829,14 +837,14 @@ class elFinder {
 		if ($protocol === 'netunmount') {
 			if (! empty($args['user']) && $volume = $this->volume($args['user'])) {
 				if ($this->removeNetVolume($args['host'], $volume)) {
-					return array('sync' => true);
+					return array('removed' => array(array('hash' => $volume->root())));
 				}
 			}
 			return array('sync' => true, 'error' => $this->error(self::ERROR_NETUNMOUNT));
 		}
 		
 		$driver   = isset(self::$netDrivers[$protocol]) ? self::$netDrivers[$protocol] : '';
-		$class    = 'elfindervolume'.$driver;
+		$class    = 'elFinderVolume'.$driver;
 
 		if (!class_exists($class)) {
 			return array('error' => $this->error(self::ERROR_NETMOUNT, $args['host'], self::ERROR_NETMOUNT_NO_DRIVER));
@@ -874,6 +882,14 @@ class elFinder {
 		}
 		
 		$netVolumes = $this->getNetVolumes();
+		
+		if (! isset($options['id'])) {
+			// given fixed unique id
+			if (! $options['id'] = $this->getNetVolumeUniqueId($netVolumes)) {
+				return array('error' => $this->error(self::ERROR_NETMOUNT, $args['host'], 'Could\'t given volume id.'));
+			}
+		}
+		
 		if ($volume->mount($options)) {
 			if (! $key = @ $volume->netMountKey) {
 				$key = md5($protocol . '-' . join('-', $options));
@@ -1406,7 +1422,7 @@ class elFinder {
 	* @author Naoki Sawada
 	**/
 	protected function get_remote_contents( &$url, $timeout = 30, $redirect_max = 5, $ua = 'Mozilla/5.0', $fp = null ) {
-		$method = (function_exists('curl_exec') && !ini_get('safe_mode'))? 'curl_get_contents' : 'fsock_get_contents'; 
+		$method = (function_exists('curl_exec') && !ini_get('safe_mode') && !ini_get('open_basedir'))? 'curl_get_contents' : 'fsock_get_contents'; 
 		return $this->$method( $url, $timeout, $redirect_max, $ua, $fp );
 	}
 	
@@ -2662,6 +2678,37 @@ class elFinder {
 		return (double)$time[1] + (double)$time[0];
 	}
 	
+	/**
+	 * Return Network mount volume unique ID
+	 *
+	 * @param  array   $netVolumes  Saved netvolumes array
+	 * @param  string  $prefix      Id prefix
+	 * @return string|false
+	 * @author Naoki Sawada
+	 **/
+	protected function getNetVolumeUniqueId($netVolumes = null, $prefix = 'nm') {
+		$id = false;
+		if (is_null($netVolumes)) {
+			$netVolumes = $this->getNetVolumes();
+		}
+		$ids = array();
+		foreach($netVolumes as $vOps) {
+			if (isset($vOps['id']) && strpos($vOps['id'], $prefix) === 0) {
+				$ids[$vOps['id']] = true;
+			}
+		}
+		if (! $ids) {
+			$id = $prefix.'1';
+		} else {
+			$i = 0;
+			while(isset($ids[$prefix.++$i]) && $i < 10000);
+			$id = $prefix.$i;
+			if (isset($ids[$id])) {
+				$id = false;
+			}
+		}
+		return $id;
+	}
 	
 	/***************************************************************************/
 	/*                           static  utils                                 */
