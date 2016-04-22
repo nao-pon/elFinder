@@ -22,8 +22,7 @@ $.fn.elfindercontextmenu = function(fm) {
 				.on('contextmenu', function(){return false;}),
 			subpos  = fm.direction == 'ltr' ? 'left' : 'right',
 			types = $.extend({}, fm.options.contextmenu),
-			clItem = cmItem + (fm.UA.Touch ? ' elfinder-touch' : ''),
-			tpl     = '<div class="'+clItem+'"><span class="elfinder-button-icon {icon} elfinder-contextmenu-icon"/><span>{label}</span></div>',
+			tpl     = '<div class="'+cmItem+'"><span class="elfinder-button-icon {icon} elfinder-contextmenu-icon"/><span>{label}</span></div>',
 			item = function(label, icon, callback) {
 				return $(tpl.replace('{icon}', icon ? 'elfinder-button-icon-'+icon : '').replace('{label}', label))
 					.click(function(e) {
@@ -122,6 +121,9 @@ $.fn.elfindercontextmenu = function(fm) {
 						});
 					}
 				}
+				if (type === 'navbar') {
+					fm.select({selected: targets});
+				}
 
 				selcnt = fm.selected().length;
 				if (selcnt > 1) {
@@ -166,6 +168,7 @@ $.fn.elfindercontextmenu = function(fm) {
 								setTimeout(function(){node.data('touching', false);}, 50);
 							})
 							.on('click touchend', '.'+smItem, function(e){
+								var opts;
 								e.stopPropagation();
 								if (node.data('touching')) {
 									node.data('touching', false);
@@ -173,7 +176,11 @@ $.fn.elfindercontextmenu = function(fm) {
 									e.preventDefault();
 								} else if (e.type == 'click') {
 									menu.hide();
-									cmd.exec(targets, $(this).data('exec'));
+									opts = $(this).data('exec');
+									if ($.isPlainObject(opts)) {
+										opts._currentType = type;
+									}
+									cmd.exec(targets, opts);
 								}
 							});
 							
@@ -226,14 +233,14 @@ $.fn.elfindercontextmenu = function(fm) {
 							$.each(cmd.variants, function(i, variant) {
 								submenu.append(
 									variant === '|' ? '<div class="elfinder-contextmenu-separator"/>' :
-									$('<div class="'+clItem+' '+smItem+'"><span>'+variant[1]+'</span></div>').data('exec', variant[0])
+									$('<div class="'+cmItem+' '+smItem+'"><span>'+variant[1]+'</span></div>').data('exec', variant[0])
 								);
 							});
 								
 						} else {
 							node = item(cmd.title, cmd.name, function() {
 								close();
-								cmd.exec(targets);
+								cmd.exec(targets, {_currentType: type});
 							});
 							if (cmd.extra && cmd.extra.node) {
 								node.append(
