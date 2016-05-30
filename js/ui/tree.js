@@ -160,9 +160,10 @@ $.fn.elfindertree = function(fm, opts) {
 					e.stopPropagation();
 					helper.data('dropover', helper.data('dropover') + 1);
 					dst.data('dropover', true);
-					if (ui.helper.data('namespace') !== fm.namespace) {
+					if (ui.helper.data('namespace') !== fm.namespace || ! insideNavbar(e.clientX) || ! fm.insideWorkzone(e.pageX, e.pageY)) {
 						dst.removeClass(cl);
-						return false;
+						helper.removeClass('elfinder-drag-helper-move elfinder-drag-helper-plus');
+						return;
 					}
 					dst.addClass(hover)
 					if (dst.is('.'+collapsed+':not(.'+expanded+')')) {
@@ -202,7 +203,9 @@ $.fn.elfindertree = function(fm, opts) {
 					$(this).removeData('dropover')
 					       .removeClass(hover+' '+dropover);
 				},
-				drop : function(e, ui) { insideNavbar(e.clientX) && drop.call(this, e, ui); }
+				drop : function(e, ui) {
+					insideNavbar(e.clientX) && drop.call(this, e, ui);
+				}
 			}),
 			
 			spinner = $(fm.res('tpl', 'navspinner')),
@@ -586,7 +589,7 @@ $.fn.elfindertree = function(fm, opts) {
 						return;
 					}
 					
-					fm.trigger('searchend', { noupdate: true });
+					fm.searchStatus.state && fm.trigger('searchend', { noupdate: true });
 				
 					if (hash != fm.cwd().hash && !link.hasClass(disabled)) {
 						fm.exec('open', hash).done(function() {
@@ -601,7 +604,9 @@ $.fn.elfindertree = function(fm, opts) {
 				})
 				// for touch device
 				.on('touchstart', selNavdir, function(e) {
-					e.stopPropagation();
+					if (e.originalEvent.touches.length > 1) {
+						return;
+					}
 					var evt = e.originalEvent,
 					p = $(this)
 					.addClass(hover)
@@ -618,7 +623,6 @@ $.fn.elfindertree = function(fm, opts) {
 					}, 500));
 				})
 				.on('touchmove touchend', selNavdir, function(e) {
-					e.stopPropagation();
 					clearTimeout($(this).data('tmlongtap'));
 					if (e.type == 'touchmove') {
 						$(this).removeClass(hover);

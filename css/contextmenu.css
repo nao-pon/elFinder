@@ -46,13 +46,13 @@
 	display:none;
 }
 .elfinder .elfinder-contextmenu-ltr .elfinder-contextmenu-item .ui-icon {
-	left: 2px;;
+	left: 2px;
 }
 .elfinder .elfinder-contextmenu-rtl .elfinder-contextmenu-item .ui-icon {
-	right: 2px;;
+	right: 2px;
 }
 .elfinder-touch .elfinder-contextmenu-item {
-	padding:12px 30px;
+	padding:12px 38px;
 }
 
 /* text in item */
@@ -112,4 +112,9 @@
 	height:0px;
 	border-top:1px solid #ccc;
 	margin:0 1px;
+}
+
+/* for CSS style priority to ui-state-disabled - "background-image: none" */
+.elfinder .elfinder-button-icon.ui-state-disabled {
+	background-image: url('../img/toolbar.png') !important;
 }

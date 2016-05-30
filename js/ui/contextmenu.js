@@ -37,21 +37,29 @@ $.fn.elfindercontextmenu = function(fm) {
 				var evTouchStart = 'touchstart.contextmenuAutoToggle';
 				menu.data('hideTm') && clearTimeout(menu.data('hideTm'));
 				if (menu.is(':visible')) {
-					menu.on('touchstart', function() {
-						menu.stop();
+					menu.on('touchstart', function(e) {
+						if (e.originalEvent.touches.length > 1) {
+							return;
+						}
+						menu.stop().show();
 						menu.data('hideTm') && clearTimeout(menu.data('hideTm'));
 					})
 					.data('hideTm', setTimeout(function() {
 						cwd.find('.elfinder-cwd-file').off(evTouchStart);
 						cwd.find('.elfinder-cwd-file.ui-selected')
 						.one(evTouchStart, function(e) {
-							if (menu.first().length) {
+							if (e.originalEvent.touches.length > 1) {
+								return;
+							}
+							var tgt = $(e.target);
+							if (menu.first().length && !tgt.is('input:checkbox') && !tgt.hasClass('elfinder-cwd-select')) {
 								open(e.originalEvent.touches[0].pageX, e.originalEvent.touches[0].pageY);
 								return false;
 							}
+							cwd.find('.elfinder-cwd-file').off(evTouchStart);
 						})
 						.one('unselect.'+fm.namespace, function() {
-							$(this).off(evTouchStart);
+							cwd.find('.elfinder-cwd-file').off(evTouchStart);
 						});
 						menu.fadeOut({
 							duration: 300,
@@ -72,8 +80,8 @@ $.fn.elfindercontextmenu = function(fm) {
 					mw         = fm.UA.Mobile? 40 : 2,
 					mh         = fm.UA.Mobile? 20 : 2,
 					body       = $('body'),
-					x          = x - (bpos? bpos.left : 0) + body.scrollLeft(),
-					y          = y - (bpos? bpos.top : 0) + body.scrollTop(),
+					x          = x - (bpos? bpos.left : 0),
+					y          = y - (bpos? bpos.top : 0),
 					css        = {
 						top  : Math.max(0, y + mh + height < bheight ? y + mh : y - (y + height - bheight)),
 						left : Math.max(0, (x < width + mw || x + mw + width < bwidth)? x + mw : x - mw - width),
@@ -243,10 +251,9 @@ $.fn.elfindercontextmenu = function(fm) {
 								cmd.exec(targets, {_currentType: type});
 							});
 							if (cmd.extra && cmd.extra.node) {
-								node.append(
-									$('<span class="elfinder-button-icon elfinder-button-icon-'+(cmd.extra.icon || '')+' elfinder-contextmenu-extra-icon"/>')
-									.append(cmd.extra.node)
-								);
+								$('<span class="elfinder-button-icon elfinder-button-icon-'+(cmd.extra.icon || '')+' elfinder-contextmenu-extra-icon"/>')
+									.append(cmd.extra.node).appendTo(node);
+								$(cmd.extra.node).trigger('ready');
 							} else {
 								node.remove('.elfinder-contextmenu-extra-icon');
 							}

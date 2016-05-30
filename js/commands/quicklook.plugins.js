@@ -1,7 +1,5 @@
 "use strict";
 
-(function(){
-
 elFinder.prototype.commands.quicklook.plugins = [
 	
 	/**
@@ -10,7 +8,7 @@ elFinder.prototype.commands.quicklook.plugins = [
 	 * @param elFinder.commands.quicklook
 	 **/
 	function(ql) {
-		var mimes   = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'],
+		var mimes   = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/x-ms-bmp'],
 			preview = ql.preview;
 		
 		// what kind of images we can display
@@ -23,12 +21,15 @@ elFinder.prototype.commands.quicklook.plugins = [
 		});
 			
 		preview.on('update', function(e) {
-			var file = e.file,
-				img;
+			var fm   = ql.fm,
+				file = e.file,
+				img, loading;
 
-			if ($.inArray(file.mime, mimes) !== -1) {
+			if (ql.dispInlineRegex.test(file.mime) && $.inArray(file.mime, mimes) !== -1) {
 				// this is our file - stop event propagation
 				e.stopImmediatePropagation();
+
+				loading = $('<div class="elfinder-quicklook-info-data"> '+fm.i18n('nowLoading')+'<span class="elfinder-info-spinner"></div>').appendTo(ql.info.find('.elfinder-quicklook-info'));
 
 				img = $('<img/>')
 					.hide()
@@ -55,11 +56,15 @@ elFinder.prototype.commands.quicklook.plugins = [
 							})
 							.trigger('changesize');
 							
+							loading.remove();
 							// hide info/icon
 							ql.hideinfo();
 							//show image
 							img.fadeIn(100);
 						}, 1)
+					})
+					.error(function() {
+						loading.remove();
 					})
 					.attr('src', ql.fm.openUrl(file.hash));
 			}
@@ -78,10 +83,12 @@ elFinder.prototype.commands.quicklook.plugins = [
 			fm      = ql.fm;
 			
 		preview.on('update', function(e) {
-			var file = e.file, jqxhr;
+			var file = e.file, jqxhr, loading;
 			
-			if ($.inArray(file.mime, mimes) !== -1) {
+			if (ql.dispInlineRegex.test(file.mime) && $.inArray(file.mime, mimes) !== -1) {
 				e.stopImmediatePropagation();
+
+				loading = $('<div class="elfinder-quicklook-info-data"> '+fm.i18n('nowLoading')+'<span class="elfinder-info-spinner"></div>').appendTo(ql.info.find('.elfinder-quicklook-info'));
 
 				// stop loading on change file if not loaded yet
 				preview.one('change', function() {
@@ -98,6 +105,9 @@ elFinder.prototype.commands.quicklook.plugins = [
 					doc.open();
 					doc.write(data.content);
 					doc.close();
+				})
+				.always(function() {
+					loading.remove();
 				});
 			}
 		})
@@ -117,11 +127,13 @@ elFinder.prototype.commands.quicklook.plugins = [
 		preview.on('update', function(e) {
 			var file = e.file,
 				mime = file.mime,
-				jqxhr;
+				jqxhr, loading;
 			
 			if (mime.indexOf('text/') === 0 || $.inArray(mime, mimes) !== -1) {
 				e.stopImmediatePropagation();
 				
+				loading = $('<div class="elfinder-quicklook-info-data"> '+fm.i18n('nowLoading')+'<span class="elfinder-info-spinner"></div>').appendTo(ql.info.find('.elfinder-quicklook-info'));
+
 				// stop loading on change file if not loadin yet
 				preview.one('change', function() {
 					jqxhr.state() == 'pending' && jqxhr.reject();
@@ -134,6 +146,9 @@ elFinder.prototype.commands.quicklook.plugins = [
 				.done(function(data) {
 					ql.hideinfo();
 					$('<div class="elfinder-quicklook-preview-text-wrapper"><pre class="elfinder-quicklook-preview-text">'+fm.escape(data.content)+'</pre></div>').appendTo(preview);
+				})
+				.always(function() {
+					loading.remove();
 				});
 			}
 		});
@@ -165,7 +180,7 @@ elFinder.prototype.commands.quicklook.plugins = [
 		active && preview.on('update', function(e) {
 			var file = e.file, node;
 			
-			if (file.mime == mime) {
+			if (ql.dispInlineRegex.test(file.mime) && file.mime == mime) {
 				e.stopImmediatePropagation();
 				preview.one('change', function() {
 					node.off('load').remove();
@@ -209,7 +224,7 @@ elFinder.prototype.commands.quicklook.plugins = [
 			var file = e.file,
 				node;
 				
-			if (file.mime == mime) {
+			if (ql.dispInlineRegex.test(file.mime) && file.mime == mime) {
 				e.stopImmediatePropagation();
 				ql.hideinfo();
 				node = $('<embed class="elfinder-quicklook-preview-flash" pluginspage="http://www.macromedia.com/go/getflashplayer" src="'+fm.url(file.hash)+'" quality="high" type="application/x-shockwave-flash" wmode="transparent" />')
@@ -382,7 +397,7 @@ elFinder.prototype.commands.quicklook.plugins = [
 			preview = ql.preview,
 			fm      = ql.fm;
 
-		if (typeof Uint8Array !== 'undefined') {
+		if (typeof Uint8Array !== 'undefined' && elFinder.Zlib) {
 			preview.on('update', function(e) {
 				var file = e.file,
 					doc, xhr, loading;
@@ -391,7 +406,7 @@ elFinder.prototype.commands.quicklook.plugins = [
 					// this is our file - stop event propagation
 					e.stopImmediatePropagation();
 					
-					loading = $('<div class="elfinder-quicklook-info-data"> Now loading...<span class="elfinder-info-spinner"></div>').appendTo(ql.info.find('.elfinder-quicklook-info'));
+					loading = $('<div class="elfinder-quicklook-info-data"> '+fm.i18n('nowLoading')+'<span class="elfinder-info-spinner"></div>').appendTo(ql.info.find('.elfinder-quicklook-info'));
 					
 					// stop loading on change file if not loaded yet
 					preview.one('change', function() {
@@ -518,7 +533,7 @@ elFinder.prototype.commands.quicklook.plugins = [
 						node.off('load').remove();
 					});
 					
-					loading = $('<div class="elfinder-quicklook-info-data"> Now loading...<span class="elfinder-info-spinner"></div>').appendTo(ql.info.find('.elfinder-quicklook-info'));
+					loading = $('<div class="elfinder-quicklook-info-data"> '+fm.i18n('nowLoading')+'<span class="elfinder-info-spinner"></div>').appendTo(ql.info.find('.elfinder-quicklook-info'));
 					
 					node = $('<iframe class="elfinder-quicklook-preview-iframe"/>')
 						.css('background-color', 'transparent')
@@ -528,7 +543,7 @@ elFinder.prototype.commands.quicklook.plugins = [
 							loading.remove();
 							$(this).css('background-color', '#fff').show();
 						})
-						.attr('src', 'http://docs.google.com/gview?embedded=true&url=' + encodeURIComponent(fm.url(file.hash)));
+						.attr('src', 'http://docs.google.com/gview?embedded=true&url=' + encodeURIComponent(fm.convAbsUrl(fm.url(file.hash))));
 				}
 			}
 			
@@ -536,6 +551,9 @@ elFinder.prototype.commands.quicklook.plugins = [
 	}
 
 ];
+
+try {
+(function(){
 
 /** @license zlib.js 2012 - imaya [ https://github.com/imaya/zlib.js ] The MIT License */(function() {'use strict';function m(a){throw a;}var q=void 0,u,aa=this;function v(a,b){var c=a.split("."),d=aa;!(c[0]in d)&&d.execScript&&d.execScript("var "+c[0]);for(var f;c.length&&(f=c.shift());)!c.length&&b!==q?d[f]=b:d=d[f]?d[f]:d[f]={}};var w="undefined"!==typeof Uint8Array&&"undefined"!==typeof Uint16Array&&"undefined"!==typeof Uint32Array&&"undefined"!==typeof DataView;new (w?Uint8Array:Array)(256);var x;for(x=0;256>x;++x)for(var y=x,ba=7,y=y>>>1;y;y>>>=1)--ba;var z=[0,1996959894,3993919788,2567524794,124634137,1886057615,3915621685,2657392035,249268274,2044508324,3772115230,2547177864,162941995,2125561021,3887607047,2428444049,498536548,1789927666,4089016648,2227061214,450548861,1843258603,4107580753,2211677639,325883990,1684777152,4251122042,2321926636,335633487,1661365465,4195302755,2366115317,997073096,1281953886,3579855332,2724688242,1006888145,1258607687,3524101629,2768942443,901097722,1119000684,3686517206,2898065728,853044451,1172266101,3705015759,
 2882616665,651767980,1373503546,3369554304,3218104598,565507253,1454621731,3485111705,3099436303,671266974,1594198024,3322730930,2970347812,795835527,1483230225,3244367275,3060149565,1994146192,31158534,2563907772,4023717930,1907459465,112637215,2680153253,3904427059,2013776290,251722036,2517215374,3775830040,2137656763,141376813,2439277719,3865271297,1802195444,476864866,2238001368,4066508878,1812370925,453092731,2181625025,4111451223,1706088902,314042704,2344532202,4240017532,1658658271,366619977,
@@ -597,3 +615,5 @@ c.name=m.join("")}if(0<(c.h&16)){m=[];for(k=0;0<(g=h[l++]);)m[k++]=String.fromCh
 d=(h[l++]|h[l++]<<8|h[l++]<<16|h[l++]<<24)>>>0;(a.length&4294967295)!==d&&n(Error("invalid input size: "+(a.length&4294967295)+" / "+d));this.m.push(c);this.c=l}this.s=!0;var y=this.m,s,M,S=0,T=0,C;s=0;for(M=y.length;s<M;++s)T+=y[s].data.length;if(u){C=new Uint8Array(T);for(s=0;s<M;++s)C.set(y[s].data,S),S+=y[s].data.length}else{C=[];for(s=0;s<M;++s)C[s]=y[s].data;C=Array.prototype.concat.apply([],C)}return C};r("Zlib.Gunzip",$);r("Zlib.Gunzip.prototype.decompress",$.prototype.g);r("Zlib.Gunzip.prototype.getMembers",$.prototype.G);}).call(this);
 
 }).bind(elFinder)();
+
+} catch(e) {};

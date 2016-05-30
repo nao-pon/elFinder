@@ -99,7 +99,7 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
 		
 		
 		$this->db = new mysqli($this->options['host'], $this->options['user'], $this->options['pass'], $this->options['db'], $this->options['port'], $this->options['socket']);
-		if ($this->db->connect_error || @mysqli_connect_error()) {
+		if ($this->db->connect_error || mysqli_connect_error()) {
 			return false;
 		}
 		
@@ -136,8 +136,8 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
 
 		if (($tmp = $this->options['tmpPath'])) {
 			if (!file_exists($tmp)) {
-				if (@mkdir($tmp)) {
-					@chmod($tmp, $this->options['tmbPathMode']);
+				if (mkdir($tmp)) {
+					chmod($tmp, $this->options['tmbPathMode']);
 				}
 			}
 			
@@ -599,8 +599,8 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
 	 **/
 	protected function _fopen($path, $mode='rb') {
 		$fp = $this->tmbPath
-			? @fopen($this->getTempFile($path), 'w+')
-			: @tmpfile();
+			? fopen($this->getTempFile($path), 'w+')
+			: tmpfile();
 		
 		
 		if ($fp) {
@@ -626,9 +626,9 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
      * @author Dmitry (dio) Levashov
      */
 	protected function _fclose($fp, $path='') {
-		@fclose($fp);
+		fclose($fp);
 		if ($path) {
-			@unlink($this->getTempFile($path));
+			unlink($this->getTempFile($path));
 		}
 	}
 	
@@ -738,7 +738,7 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
      * @author Dmitry Levashov
      */
 	protected function _setContent($path, $fp) {
-		rewind($fp);
+		elFinder::rewind($fp);
 		$fstat = fstat($fp);
 		$size = $fstat['size'];
 		
@@ -764,7 +764,7 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
 		$h = !empty($stat['height']) ? $stat['height'] : 0;
 		
 		$id = $this->_joinPath($dir, $name);
-		rewind($fp);
+		elFinder::rewind($fp);
 		$stat = fstat($fp);
 		$size = $stat['size'];
 		
@@ -794,7 +794,7 @@ class elFinderVolumeMySQL extends elFinderVolumeDriver {
 
 		
 		$content = '';
-		rewind($fp);
+		elFinder::rewind($fp);
 		while (!feof($fp)) {
 			$content .= fread($fp, 8192);
 		}
