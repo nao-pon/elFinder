@@ -359,7 +359,6 @@ class elFinderVolumeGoogleDrive extends elFinderVolumeDriver
             
             $client = new Google_Client();
 
-            debug($this->options);
             try {
                 $client->setAccessToken($this->options['accessToken']);
                 if (true !== ($res = $this->refreshGoogleDriveToken($client))) {
