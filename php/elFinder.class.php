@@ -87,6 +87,13 @@ class elFinder {
 	protected static $commonTempPath = '';
 	
 	/**
+	 * Additional volume root options for network mounting volume
+	 * 
+	 * @var array
+	 */
+	protected $optionsNetVolumes = array();
+	
+	/**
 	 * Session key of net mount volumes
 	 *
 	 * @deprecated
@@ -363,6 +370,7 @@ class elFinder {
 			elFinder::$commonTempPath = '';
 		}
 		$this->maxArcFilesSize = isset($opts['maxArcFilesSize'])? intval($opts['maxArcFilesSize']) : 0;
+		$this->optionsNetVolumes = is_array($opts['optionsNetVolumes'])? $opts['optionsNetVolumes'] : array();
 		
 		// deprecated settings
 		$this->netVolumesSessionKey = !empty($opts['netVolumesSessionKey'])? $opts['netVolumesSessionKey'] : 'elFinderNetVolumes';
@@ -666,9 +674,7 @@ class elFinder {
 		
 		if (substr(PHP_OS,0,3) === 'WIN') {
 			// set time out
-			if (($_max_execution_time = ini_get('max_execution_time')) && $_max_execution_time < 300) {
-				set_time_limit(300);
-			}
+			elFinder::extendTimeLimit(300);
 		}
 		
 		try {
@@ -922,6 +928,14 @@ class elFinder {
 			}
 		}
 		
+		// load additional volume root options
+		if (! empty($this->optionsNetVolumes['*'])) {
+			$options = array_merge($options, $this->optionsNetVolumes['*']);
+		}
+		if (! empty($this->optionsNetVolumes[$protocol])) {
+			$options = array_merge($options, $this->optionsNetVolumes[$protocol]);
+		}
+		
 		if ($volume->mount($options)) {
 			if (! $key =  $volume->netMountKey) {
 				$key = md5($protocol . '-' . join('-', $options));
@@ -1002,9 +1016,8 @@ class elFinder {
 				$standby = $sleep;
 			}
 			$limit = max(0, floor($standby / $sleep)) + 1;
-			$timelimit = ini_get('max_execution_time');
 			do {
-				$timelimit && set_time_limit($timelimit + $sleep);
+				elFinder::extendTimeLimit(30 + $sleep);
 				$_mtime = 0;
 				foreach($ls as $_f) {
 					$_mtime = max($_mtime, $_f['ts']);
@@ -2505,9 +2518,8 @@ class elFinder {
 				} else {
 					$sleep = max(1, (int)$volume->getOption('tsPlSleep'));
 					$limit = max(1, $standby / $sleep) + 1;
-					$timelimit = ini_get('max_execution_time');
 					do {
-						$timelimit && set_time_limit($timelimit + $sleep);
+						elFinder::extendTimeLimit(30 + $sleep);
 						$volume->clearstatcache();
 						if (($info = $volume->file($hash)) != false) {
 							if ($info['ts'] != $compare) {
@@ -3029,5 +3041,21 @@ class elFinder {
 		return isset(elFinder::$$key)? elFinder::$$key : null;
 	}
 	
+	/**
+	 * Extend PHP execution time limit
+	 * 
+	 * @param Int $time
+	 * @return void
+	 */
+	public static function extendTimeLimit($time = null) {
+		static $defLimit = null;
+		if (is_null($defLimit)) {
+			$defLimit = ini_get('max_execution_time');
+		}
+		if ($defLimit != 0) {
+			$time = is_null($time)? $defLimit : max($defLimit, $time);
+			set_time_limit($time);
+		}
+	}
 
 } // END class

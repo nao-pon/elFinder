@@ -230,18 +230,22 @@ elFinder.prototype.commands.quicklook = function() {
 				}
 				$(this).toggleClass(navicon+'-fullscreen-off');
 				var collection = win;
-				if(parent.is('.ui-resizable')) {
+				if (parent.is('.ui-resizable')) {
 					collection = collection.add(parent);
 				};
-				$.fn.resizable && !fm.UA.Touch && collection.resizable(full ? 'enable' : 'disable').removeClass('ui-state-disabled');
+				$.fn.resizable && collection.resizable(full ? 'enable' : 'disable').removeClass('ui-state-disabled');
 
 				win.trigger('viewchange');
 			}),
 		
 		navShow = function() {
-			navtm && clearTimeout(navtm);
-			navbar.stop(true, true).show();
-			coverHide();
+			if (self.window.hasClass(fullscreen)) {
+				navtm && clearTimeout(navtm);
+				// if use `show()` it make infinite loop with old jQuery (jQuery/jQuery UI: 1.8.0/1.9.0)
+				// see #1478 https://github.com/Studio-42/elFinder/issues/1478
+				navbar.stop(true, true).css('display', 'block');
+				coverHide();
+			}
 		},
 		
 		coverHide = function() {
@@ -311,7 +315,7 @@ elFinder.prototype.commands.quicklook = function() {
 					$('<img/>')
 						.hide()
 						.appendTo(self.preview)
-						.load(function() {
+						.on('load', function() {
 							icon.addClass(tmb.className).css('background-image', "url('"+tmb.url+"')");
 							$(this).remove();
 						})
@@ -476,7 +480,7 @@ elFinder.prototype.commands.quicklook = function() {
 				e.keyCode == 27 && self.opened() && win.trigger('close')
 			})
 			
-			if ($.fn.resizable/* && !fm.UA.Touch*/) {
+			if ($.fn.resizable) {
 				win.resizable({ 
 					handles   : 'se', 
 					minWidth  : 350, 

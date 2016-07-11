@@ -218,8 +218,13 @@ class elFinderVolumeLocalFileSystem extends elFinderVolumeDriver {
 		if ($r === 0) {
 			// changed
 			clearstatcache();
-			$mtime = filemtime($path); // error on busy?
-			return $mtime? $mtime : time();
+			if (file_exists($path)) {
+				$mtime = filemtime($path); // error on busy?
+				return $mtime? $mtime : time();
+			} else {
+				// target was removed
+				return 0;
+			}
 		} else if ($r === 2) {
 			// not changed (timeout)
 			return $compare;
@@ -285,6 +290,11 @@ class elFinderVolumeLocalFileSystem extends elFinderVolumeDriver {
 		
 		$changeSep = (DIRECTORY_SEPARATOR !== '/');
 		if ($changeSep) {
+			$drive = '';
+			if (preg_match('/^([a-zA-Z]:)(.*)/', $path, $m)) {
+				$drive = $m[1];
+				$path = $m[2]? $m[2] : '/';
+			}
 			$path = str_replace(DIRECTORY_SEPARATOR, '/', $path);
 		}
 
@@ -324,7 +334,7 @@ class elFinderVolumeLocalFileSystem extends elFinderVolumeDriver {
 		}
 		
 		if ($changeSep) {
-			$path = str_replace('/', DIRECTORY_SEPARATOR, $path);
+			$path = $drive . str_replace('/', DIRECTORY_SEPARATOR, $path);
 		}
 		
 		return $path ? $path : '.';

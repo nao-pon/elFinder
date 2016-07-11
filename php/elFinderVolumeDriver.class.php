@@ -189,6 +189,8 @@ abstract class elFinderVolumeDriver {
 		'treeDeep'        => 1,
 		// root url, not set to disable sending URL to client (replacement for old "fileURL" option)
 		'URL'             => '',
+		// directory link url to own manager url with folder hash (`true`, `false` or default `'auto'`: URL is empty then `true` else `false`)
+		'dirUrlOwn'     => 'auto',
 		// directory separator. required by client to show paths correctly
 		'separator'       => DIRECTORY_SEPARATOR,
 		// Server character encoding (default is '': UTF-8)
@@ -279,6 +281,10 @@ abstract class elFinderVolumeDriver {
 		'copyFrom'        => true,
 		// allow to copy from other volumes to this one?
 		'copyTo'          => true,
+		// cmd duplicate suffix format e.g. '_%s_' to without spaces
+		'duplicateSuffix' => ' %s ',
+		// unique name numbar format e.g. '(%d)' to (1), (2)...
+		'uniqueNumFormat' => '%d',
 		// list of commands disabled on this root
 		'disabled'        => array(),
 		// enable file owner, group & mode info, `false` to inactivate "chmod" command.
@@ -1099,6 +1105,11 @@ abstract class elFinderVolumeDriver {
 		if ($this->URL && preg_match("|[^/?&=]$|", $this->URL)) {
 			$this->URL .= '/';
 		}
+		if (strtolower($this->options['dirUrlOwn']) === 'auto') {
+			$this->options['dirUrlOwn'] = $this->URL? false : true;
+		} else {
+			$this->options['dirUrlOwn'] = (bool)$this->options['dirUrlOwn'];
+		}
 
 		$this->tmbURL   = !empty($this->options['tmbURL']) ? $this->options['tmbURL'] : '';
 		if ($this->tmbURL && $this->tmbURL !== 'self' && preg_match("|[^/?&=]$|", $this->tmbURL)) {
@@ -1845,7 +1856,7 @@ abstract class elFinderVolumeDriver {
 
 		$path = $this->decode($hash);
 		$dir  = $this->dirnameCE($path);
-		$name = $this->uniqueName($dir, $file['name'], ' '.$suffix.' ');
+		$name = $this->uniqueName($dir, $file['name'], sprintf($this->options['duplicateSuffix'], $suffix));
 
 		if (!$this->allowCreate($dir, $name, ($file['mime'] === 'directory'))) {
 			return $this->setError(elFinder::ERROR_PERM_DENIED);
@@ -3024,7 +3035,7 @@ abstract class elFinderVolumeDriver {
 		$max = $i+100000;
 
 		while ($i <= $max) {
-			$n = $name.($i > 0 ? $i : '').$ext;
+			$n = $name.($i > 0 ? sprintf($this->options['uniqueNumFormat'], $i) : '').$ext;
 
 			if (!$this->stat($this->joinPathCE($dir, $n))) {
 				$this->clearcache();
@@ -3191,7 +3202,7 @@ abstract class elFinderVolumeDriver {
 	 */
 	protected function delTree($localpath) {
 		foreach ($this->_scandir($localpath) as $p) {
-			set_time_limit(30);
+			elFinder::extendTimeLimit();
 			$stat = $this->stat($this->convEncOut($p));
 			$this->convEncIn();
 			($stat['mime'] === 'directory')? $this->delTree($p) : $this->_unlink($p);
@@ -3553,6 +3564,9 @@ abstract class elFinderVolumeDriver {
 				} else {
 					$stat['dirs'] = 1;
 				}
+				if ($this->options['dirUrlOwn'] === true) {
+					$stat['url'] = '#elf_' . $stat['hash'];
+				}
 			} else {
 				// for files - check for thumbnails
 				$p = isset($stat['target']) ? $stat['target'] : $path;
@@ -3717,6 +3731,9 @@ abstract class elFinderVolumeDriver {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function countSize($path) {
+		
+		elFinder::extendTimeLimit();
+		
 		$stat = $this->stat($path);
 
 		if (empty($stat) || !$stat['read'] || !empty($stat['hidden'])) {
@@ -3895,7 +3912,7 @@ abstract class elFinderVolumeDriver {
 		}
 		
 		foreach($this->scandirCE($path) as $p) {
-			set_time_limit($this->options['searchTimeout'] + 30);
+			elFinder::extendTimeLimit($this->options['searchTimeout'] + 30);
 			
 			if ($timeout && ($this->error || $timeout < time())) {
 				!$this->error && $this->setError(elFinder::ERROR_SEARCH_TIMEOUT, $this->path($this->encode($path)));
@@ -3958,6 +3975,9 @@ abstract class elFinderVolumeDriver {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function copy($src, $dst, $name) {
+		
+		elFinder::extendTimeLimit();
+		
 		$srcStat = $this->stat($src);
 		$this->clearcache();
 		
@@ -4053,6 +4073,8 @@ abstract class elFinderVolumeDriver {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function copyFrom($volume, $src, $destination, $name) {
+		
+		elFinder::extendTimeLimit();
 		
 		if (($source = $volume->file($src)) == false) {
 			return $this->setError(elFinder::ERROR_COPY, '#'.$src, $volume->error());
@@ -4434,7 +4456,7 @@ abstract class elFinderVolumeDriver {
 			}
 		}
 
-		set_time_limit(300);
+		elFinder::extendTimeLimit(300);
 		switch ($this->imgLib) {
 			case 'imagick':
 				
@@ -4567,7 +4589,7 @@ abstract class elFinderVolumeDriver {
 			$jpgQuality = $this->options['jpgQuality'];
 		}
 
-		set_time_limit(300);
+		elFinder::extendTimeLimit(300);
 		switch ($this->imgLib) {
 			case 'imagick':
 				
@@ -4690,7 +4712,7 @@ abstract class elFinderVolumeDriver {
 			$jpgQuality = $this->options['jpgQuality'];
 		}
 
-		set_time_limit(300);
+		elFinder::extendTimeLimit(300);
 		switch ($this->imgLib) {
 			case 'imagick':
 				try {
@@ -4832,7 +4854,7 @@ abstract class elFinderVolumeDriver {
 			$jpgQuality = $this->options['jpgQuality'];
 		}
 
-		set_time_limit(300);
+		elFinder::extendTimeLimit(300);
 		switch ($this->imgLib) {
 			case 'imagick':
 				try {
@@ -4983,7 +5005,7 @@ abstract class elFinderVolumeDriver {
 	protected function rmTmb($stat) {
 		if ($stat['mime'] === 'directory') {
 			foreach ($this->scandirCE($this->decode($stat['hash'])) as $p) {
-				set_time_limit(30);
+				elFinder::extendTimeLimit(30);
 				$name = $this->basenameCE($p);
 				$name != '.' && $name != '..' && $this->rmTmb($this->stat($p));
 			}
@@ -5415,7 +5437,7 @@ abstract class elFinderVolumeDriver {
 					if ($file === '.' || $file === '..') {
 						continue;
 					}
-					set_time_limit(30);
+					elFinder::extendTimeLimit(30);
 					$path = $dir . DIRECTORY_SEPARATOR . $file;
 					if (!is_link($dir) && is_dir($path)) {
 						$this->rmdirRecursive($path);
@@ -5455,6 +5477,9 @@ abstract class elFinderVolumeDriver {
 			$cwd = getcwd();
 			chdir($dir);
 			
+			foreach($files as $i => $file) {
+				$files[$i] = '.'.DIRECTORY_SEPARATOR.$file;
+			}
 			$files = array_map('escapeshellarg', $files);
 			
 			$cmd = $arc['cmd'].' '.$arc['argc'].' '.escapeshellarg($name).' '.implode(' ', $files);

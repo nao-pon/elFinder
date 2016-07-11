@@ -246,6 +246,14 @@ elFinder.prototype._options = {
 				// }
 			]
 		},
+		search : {
+			// Incremental search from the current view
+			incsearch : {
+				enable : true, // is enable true or false
+				minlen : 1,    // minimum number of characters
+				wait   : 500   // wait milliseconds
+			}
+		},
 		// "info" command options.
 		info : {
 			nullUrlDirLinkSelf : true,
@@ -550,7 +558,7 @@ elFinder.prototype._options = {
 				// fixed list header colmun
 				fixedHeader : true
 			}
-			// ,
+
 			// /**
 			//  * Add CSS class name to cwd directories (optional)
 			//  * see: https://github.com/Studio-42/elFinder/pull/1061,
@@ -558,10 +566,31 @@ elFinder.prototype._options = {
 			//  * 
 			//  * @type Function
 			//  */
+			// ,
 			// getClass: function(file) {
 			// 	// e.g. This adds the directory's name (lowercase) with prefix as a CSS class
 			// 	return 'elfinder-cwd-' + file.name.replace(/[ "]/g, '').toLowerCase();
-			// }
+			//}
+			
+			//,
+			//// Template placeholders replacement rules for overwrite. see ui/cwd.js replacement
+			//replacement : {
+			//	tooltip : function(f, fm) {
+			//		var list = fm.viewType == 'list', // current view type
+			//			query = fm.searchStatus.state == 2, // is in search results
+			//			title = fm.formatDate(f) + (f.size > 0 ? ' ('+fm.formatSize(f.size)+')' : ''),
+			//			info  = '';
+			//		if (query && f.path) {
+			//			info = fm.escape(f.path.replace(/\/[^\/]*$/, ''));
+			//		} else {
+			//			info = f.tooltip? fm.escape(f.tooltip).replace(/\r/g, '&#13;') : '';
+			//		}
+			//		if (list) {
+			//			info += (info? '&#13;' : '') + fm.escape(f.name);
+			//		}
+			//		return info? info + '&#13;' + title : title;
+			//	}
+			//}
 		}
 	},
 
@@ -578,7 +607,7 @@ elFinder.prototype._options = {
 
 	/**
 	 * Custom files sort rules.
-	 * All default rules (name/size/kind/date) set in elFinder._sortRules
+	 * All default rules (name/size/kind/date/perm/mode/owner/group) set in elFinder._sortRules
 	 *
 	 * @type {Object}
 	 * @example
@@ -670,7 +699,7 @@ elFinder.prototype._options = {
 	 * elFinder height
 	 *
 	 * @type Number
-	 * @default  "auto"
+	 * @default  400
 	 */
 	height : 400,
 	
@@ -816,7 +845,7 @@ elFinder.prototype._options = {
 		// navbarfolder menu
 		navbar : ['open', 'download', '|', 'upload', '|', 'copy', 'cut', 'paste', 'duplicate', '|', 'rm', '|', 'rename', '|', 'archive', '|', 'places', 'info', 'chmod', 'netunmount'],
 		// current directory menu
-		cwd    : ['reload', 'back', '|', 'upload', 'mkdir', 'mkfile', 'paste', '|', 'sort', 'colwidth', '|', 'info'],
+		cwd    : ['reload', 'back', '|', 'upload', 'mkdir', 'mkfile', 'paste', '|', 'view', 'sort', 'colwidth', '|', 'info'],
 		// current directory file menu
 		files  : ['getfile', '|' ,'open', 'download', 'opendir', 'quicklook', '|', 'upload', 'mkdir', '|', 'copy', 'cut', 'paste', 'duplicate', '|', 'rm', '|', 'edit', 'rename', 'resize', 'pixlr', '|', 'archive', 'extract', '|', 'places', 'info', 'chmod']
 	},

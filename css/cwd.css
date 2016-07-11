@@ -319,6 +319,10 @@
 
 /*.elfinder-cwd-view-list { padding:0 0 4px 0; }*/
 
+.elfinder-cwd-wrapper.elfinder-cwd-fixheader .elfinder-cwd::after {
+	display: none;
+}
+
 .elfinder-cwd table { 
 	width: 100%;
 	border-collapse: separate;
@@ -333,6 +337,18 @@
 .elfinder-cwd-wrapper-list.elfinder-cwd-fixheader {
 	position: absolute;
 	overflow: hidden;
+}
+
+.elfinder-cwd-wrapper-list.elfinder-cwd-fixheader:before {
+	content: '';
+	position: absolute;
+	width: 100%;
+	top: 0;
+	height: 3px;
+	background-color: white;
+}
+.elfinder-droppable-active + .elfinder-cwd-wrapper-list.elfinder-cwd-fixheader:before {
+	background-color: #8cafed;
 }
 
 .elfinder .elfinder-workzone div.elfinder-cwd-fixheader table {
@@ -474,13 +490,20 @@ tr.elfinder-cwd-file td .elfinder-cwd-select {
 	top: 3px;
 }
 .elfinder-touch .elfinder-cwd-view-list thead td .ui-resizable-handle {
-	top: 8px;
+	top: -5px;
+	margin: 10px;
 }
 .elfinder-cwd-view-list thead td .ui-resizable-e {
 	right: -7px;
 }
 .elfinder-cwd-view-list thead td .ui-resizable-w {
 	left: -7px;
+}
+.elfinder-touch .elfinder-cwd-view-list thead td .ui-resizable-e {
+	right: -16px;
+}
+.elfinder-touch .elfinder-cwd-view-list thead td .ui-resizable-w {
+	left: -16px;
 }
 
 /* empty message */
