@@ -14,6 +14,13 @@
 abstract class elFinderVolumeDriver {
 	
 	/**
+	 * Net mount key
+	 *
+	 * @var string
+	 **/
+	public $netMountKey = '';
+	
+	/**
 	 * Request args
 	 * $_POST or $_GET values
 	 * 
@@ -638,6 +645,13 @@ abstract class elFinderVolumeDriver {
 	 **/
 	protected $doSearchCurrentQuery = array();
 	
+	/**
+	 * Is root modified (for clear root stat cache)
+	 * 
+	 * @var bool
+	 */
+	protected $rootModified = false;
+	
 	/*********************************************************************/
 	/*                            INITIALIZATION                         */
 	/*********************************************************************/
@@ -840,6 +854,9 @@ abstract class elFinderVolumeDriver {
 		}
 
 		$this->clearcache();
+		if ($path == $this->root) {
+			$this->rootModified = true;
+		}
 
 		if ($file = $this->stat($path)) {
 			$files = array($file);
@@ -871,7 +888,7 @@ abstract class elFinderVolumeDriver {
 	
 	public function clearstatcache() {
 		clearstatcache();
-		$this->cache = $this->dirsCache = array();
+		$this->clearcache();
 	}
 
 	/**
@@ -1836,7 +1853,7 @@ abstract class elFinderVolumeDriver {
 			return $this->setError(elFinder::ERROR_FILE_NOT_FOUND);
 		}
 		
-		if ($name == $file['name']) {
+		if ($name === $file['name']) {
 			return $file;
 		}
 		
@@ -3018,7 +3035,7 @@ abstract class elFinderVolumeDriver {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function nameAccepted($name) {
-		if (!json_encode($name)) {
+		if (json_encode($name)===false) {
 			return false;
 		}
 		if ($this->nameValidator) {
@@ -3446,6 +3463,7 @@ abstract class elFinderVolumeDriver {
 			? $this->cache[$path]
 			: $this->updateCache($path, $this->convEncOut($this->_stat($this->convEncIn($path))));
 		if ($is_root) {
+			$this->rootModified = false;
 			$this->sessionCache['rootstat'][$rootKey] = $ret;
 			$this->session->set($this->id, $this->sessionCache);
 		}
@@ -3494,6 +3512,8 @@ abstract class elFinderVolumeDriver {
 			if (empty($stat['phash'])) {
 				$parent = $this->dirnameCE($path);
 				$stat['phash'] = $this->encode($parent);
+			} else {
+				$parent = $this->getPath($stat['phash']);
 			}
 		}
 		
@@ -3531,8 +3551,7 @@ abstract class elFinderVolumeDriver {
 		} else {
 			// lock when parent directory is not writable
 			if (!isset($stat['locked'])) {
-				$parent = $this->dirnameCE($path);
-				$pstat = isset($this->cache[$parent])? $this->cache[$parent] : array();
+				$pstat = $this->stat($parent);
 				if (isset($pstat['write']) && !$pstat['write']) {
 					$stat['locked'] = true;
 				}
@@ -3638,9 +3657,7 @@ abstract class elFinderVolumeDriver {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	protected function clearcache() {
-		$this->cache = $this->dirsCache = array();
-		unset($this->sessionCache['rootstat'][md5($this->root)]);
-		$this->session->set($this->id, $this->sessionCache);
+		$this->cache = $this->dirsCache = $this->subdirsCache = array();
 	}
 
 	/**
@@ -3658,19 +3675,22 @@ abstract class elFinderVolumeDriver {
 			$name = $path;
 		}
 		$ext = (false === $pos = strrpos($name, '.')) ? '' : substr($name, $pos + 1);
-		if ($this->mimeDetect == 'finfo') {
-			if ($type = finfo_file($this->finfo, $path)) {
-				if ($ext && preg_match('~^application/(?:octet-stream|(?:x-)?zip)~', $type)) {
-					if (isset(elFinderVolumeDriver::$mimetypes[$ext])) $type = elFinderVolumeDriver::$mimetypes[$ext];
-				} else if ($ext === 'js' && preg_match('~^text/~', $type)) {
-					$type = 'text/javascript';
+		if (is_readable($path)) {
+			if ($this->mimeDetect == 'finfo') {
+				if ($type = finfo_file($this->finfo, $path)) {
+					if ($ext && preg_match('~^application/(?:octet-stream|(?:x-)?zip)~', $type)) {
+						if (isset(elFinderVolumeDriver::$mimetypes[$ext])) $type = elFinderVolumeDriver::$mimetypes[$ext];
+					} else if ($ext === 'js' && preg_match('~^text/~', $type)) {
+						$type = 'text/javascript';
+					}
+				} else {
+					$type = 'unknown';
 				}
-			} else {
-				$type = 'unknown';
+			} else if ($this->mimeDetect == 'mime_content_type') {
+				$type = mime_content_type($path);
 			}
-		} elseif ($this->mimeDetect == 'mime_content_type') {
-			$type = mime_content_type($path);
-		} else {
+		}
+		if (! $type) {
 			$type = elFinderVolumeDriver::mimetypeInternalDetect($path);
 		}
 		
@@ -3829,7 +3849,7 @@ abstract class elFinderVolumeDriver {
 	}
 	
 	protected function isMyReload($target = '', $ARGtarget = '') {
-		if (! empty($this->ARGS['cmd']) && $this->ARGS['cmd'] === 'parents') {
+		if ($this->rootModified || (! empty($this->ARGS['cmd']) && $this->ARGS['cmd'] === 'parents')) {
 			return true;
 		}
 		if (! empty($this->ARGS['reload'])) {
@@ -4411,7 +4431,6 @@ abstract class elFinderVolumeDriver {
 			return false;
 		}
 
-		//clearstatcache();
 		return $name;
 	}
 

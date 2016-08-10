@@ -51,6 +51,7 @@ elFinder.prototype.commands.edit = function() {
 						dfrd.reject();
 						ta.elfinderdialog('close');
 					};
+					fm.toggleMaximize($(this).closest('.ui-dialog'), false);
 					ta.editor && ta.editor.save(ta[0], ta.editor.instance);
 					if (rtrim(old) !== rtrim(ta.val())) {
 						old = ta.val();
@@ -81,6 +82,7 @@ elFinder.prototype.commands.edit = function() {
 					title   : fm.escape(file.name),
 					width   : self.options.dialogWidth || 450,
 					buttons : {},
+					allowMaximize : true,
 					btnHoverFocus : false,
 					closeOnEscape : false,
 					close   : function() { 

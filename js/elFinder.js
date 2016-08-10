@@ -388,39 +388,6 @@ window.elFinder = function(node, opts) {
 	 * @type Array
 	 **/
 	this.netDrivers = [];
-	/**
-	 * User os. Required to bind native shortcuts for open/rename
-	 *
-	 * @type String
-	 **/
-	this.OS = navigator.userAgent.indexOf('Mac') !== -1 ? 'mac' : navigator.userAgent.indexOf('Win') !== -1  ? 'win' : 'other';
-	
-	/**
-	 * User browser UA.
-	 * jQuery.browser: version deprecated: 1.3, removed: 1.9
-	 *
-	 * @type Object
-	 **/
-	this.UA = (function(){
-		var webkit = !document.uniqueID && !window.opera && !window.sidebar && window.localStorage && typeof window.orientation == "undefined";
-		return {
-			// Browser IE <= IE 6
-			ltIE6:typeof window.addEventListener == "undefined" && typeof document.documentElement.style.maxHeight == "undefined",
-			// Browser IE <= IE 7
-			ltIE7:typeof window.addEventListener == "undefined" && typeof document.querySelectorAll == "undefined",
-			// Browser IE <= IE 8
-			ltIE8:typeof window.addEventListener == "undefined" && typeof document.getElementsByClassName == "undefined",
-			IE:document.uniqueID,
-			Firefox:window.sidebar,
-			Opera:window.opera,
-			Webkit:webkit,
-			Chrome:webkit && window.chrome,
-			Safari:webkit && !window.chrome,
-			Mobile:typeof window.orientation != "undefined",
-			Touch:typeof window.ontouchstart != "undefined",
-			iOS: navigator.platform.match(/^iP(?:[ao]d|hone)/)
-		};
-	})();
 	
 	/**
 	 * Configuration options
@@ -680,11 +647,17 @@ window.elFinder = function(node, opts) {
 	this.sortOrder = this.storage('sortOrder') || this.options.sortOrder || 'asc';
 
 	this.sortStickFolders = this.storage('sortStickFolders');
-
 	if (this.sortStickFolders === null) {
 		this.sortStickFolders = !!this.options.sortStickFolders;
 	} else {
 		this.sortStickFolders = !!this.sortStickFolders
+	}
+
+	this.sortAlsoTreeview = this.storage('sortAlsoTreeview');
+	if (this.sortAlsoTreeview === null) {
+		this.sortAlsoTreeview = !!this.options.sortAlsoTreeview;
+	} else {
+		this.sortAlsoTreeview = !!this.sortAlsoTreeview
 	}
 
 	this.sortRules = $.extend(true, {}, this._sortRules, this.options.sortRules);
@@ -718,7 +691,7 @@ window.elFinder = function(node, opts) {
 	 * @type Object
 	 **/
 	this.draggable = {
-		appendTo   : 'body',
+		appendTo   : node,
 		addClasses : true,
 		distance   : 4,
 		revert     : true,
@@ -1668,7 +1641,7 @@ window.elFinder = function(node, opts) {
 		
 		$.when(
 			this.request(opts1),
-			onlydir? null : this.request(opts2)
+			onlydir || cwd === this.root()? null : this.request(opts2)
 		)
 		.fail(function(error, xhr) {
 			if (! polling) {
@@ -1783,14 +1756,17 @@ window.elFinder = function(node, opts) {
 			// for performance tuning
 			jst = JSON.stringify(data);
 		}
-		if (handlers.length) {
+		if (l = handlers.length) {
 			event = $.Event(event);
 			if (allowModify) {
 				event.data = data;
 			}
 
-			l = handlers.length;
 			for (i = 0; i < l; i++) {
+				if (! handlers[i]) {
+					// probably un-binded this handler
+					continue;
+				}
 				// only callback has argument
 				if (handlers[i].length) {
 					if (!allowModify) {
@@ -1977,7 +1953,7 @@ window.elFinder = function(node, opts) {
 	 * @return jQuery
 	 */
 	this.dialog = function(content, options) {
-		var dialog = $('<div/>').append(content).appendTo(node).elfinderdialog(options),
+		var dialog = $('<div/>').append(content).appendTo(node).elfinderdialog(options, this),
 			dnode  = dialog.closest('.ui-dialog'),
 			resize = function(){
 				! dialog.data('draged') && dialog.is(':visible') && dialog.elfinderdialog('posInit');
@@ -2194,6 +2170,280 @@ window.elFinder = function(node, opts) {
 		}
 		return true;
 	};
+	
+	/**
+	 * Return css object for maximize
+	 * 
+	 * @return Object
+	 */
+	this.getMaximizeCss = function() {
+		return {
+			width   : '100%',
+			height  : '100%',
+			margin  : 0,
+			padding : 0,
+			top     : 0,
+			left    : 0,
+			display : 'block',
+			position: 'fixed',
+			zIndex  : Math.max(self.zIndex? (self.zIndex + 1) : 0 , 1000)
+		};
+	};
+	
+	// Closure for togglefullscreen
+	(function() {
+		// check is in iframe
+		if (self.UA.Fullscreen && window !== window.parent) {
+			var ifms = $('iframe', window.parent.document);
+			self.UA.Fullscreen = false;
+			if (ifms.length) {
+				$.each(ifms, function(i, ifm) {
+					if (ifm.contentWindow === window) {
+						if (typeof $(ifm).attr('allowfullscreen') !== 'undefined') {
+							self.UA.Fullscreen = true;
+						}
+						return false;
+					}
+				});
+			}
+		}
+
+		var orgStyle, bodyOvf, resizeTm, fullElm, exitFull, toFull,
+			cls = 'elfinder-fullscreen',
+			clsN = 'elfinder-fullscreen-native',
+			checkDialog = function() {
+				var t = 0,
+					l = 0;
+				$.each(node.children('.ui-dialog'), function(i, d) {
+					var $d = $(d),
+						pos = $d.position();
+					
+					if (pos.top < 0) {
+						$d.css('top', t);
+						t += 20;
+					}
+					if (pos.left < 0) {
+						$d.css('left', l);
+						l += 20;
+					}
+				});
+			},
+			funcObj = self.UA.Fullscreen? {
+				// native full screen mode
+				
+				fullElm: function() {
+					return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement || null;
+				},
+				
+				exitFull: function() {
+					if (document.exitFullscreen) {
+						return document.exitFullscreen();
+					} else if (document.webkitExitFullscreen) {
+						return document.webkitExitFullscreen();
+					} else if (document.mozCancelFullScreen) {
+						return document.mozCancelFullScreen();
+					} else if (document.msExitFullscreen) {
+						return document.msExitFullscreen();
+					}
+				},
+				
+				toFull: function(elem) {
+					if (elem.requestFullscreen) {
+						return elem.requestFullscreen();
+					} else if (elem.webkitRequestFullscreen) {
+						return elem.webkitRequestFullscreen();
+					} else if (elem.mozRequestFullScreen) {
+						return elem.mozRequestFullScreen();
+					} else if (elem.msRequestFullscreen) {
+						return elem.msRequestFullscreen();
+					}
+					return false;
+				}
+			} : {
+				// node element maximize mode
+				
+				fullElm: function() {
+					var full;
+					if (node.hasClass(cls)) {
+						return node.get(0);
+					} else {
+						full = node.find('.' + cls);
+						if (full.length) {
+							return full.get(0);
+						}
+					}
+					return null;
+				},
+				
+				exitFull: function() {
+					var elm;
+					
+					$(window).off('resize.' + namespace, resize);
+					if (bodyOvf !== void(0)) {
+						$('body').css('overflow', bodyOvf);
+					}
+					bodyOvf = void(0);
+					
+					if (orgStyle) {
+						elm = orgStyle.elm;
+						restoreStyle(elm);
+						$(elm).trigger('resize', {fullscreen: 'off'});
+					}
+					
+					$(window).trigger('resize');
+				},
+				
+				toFull: function(elem) {
+					bodyOvf = $('body').css('overflow') || '';
+					$('body').css('overflow', 'hidden');
+					
+					$(elem).css(self.getMaximizeCss())
+						.addClass(cls)
+						.trigger('resize', {fullscreen: 'on'});
+					
+					checkDialog();
+					
+					$(window).on('resize.' + namespace, resize).trigger('resize');
+					
+					return true;
+				}
+			},
+			restoreStyle = function(elem) {
+				if (orgStyle && orgStyle.elm == elem) {
+					$(elem).removeClass(cls + ' ' + clsN).attr('style', orgStyle.style);
+					orgStyle = null;
+				}
+			},
+			resize = function(e) {
+				var elm;
+				if (e.target === window) {
+					resizeTm && clearTimeout(resizeTm);
+					resizeTm = setTimeout(function() {
+						if (elm = funcObj.fullElm()) {
+							$(elm).trigger('resize', {fullscreen: 'on'});
+						}
+					}, 100);
+				}
+			};
+		
+		$(document).on('fullscreenchange.' + namespace + ' webkitfullscreenchange.' + namespace + ' mozfullscreenchange.' + namespace + ' MSFullscreenChange.' + namespace, function(e){
+			if (self.UA.Fullscreen) {
+				var elm = funcObj.fullElm(),
+					win = $(window);
+				
+				resizeTm && clearTimeout(resizeTm);
+				if (elm === null) {
+					win.off('resize.' + namespace, resize);
+					if (orgStyle) {
+						elm = orgStyle.elm;
+						restoreStyle(elm);
+						$(elm).trigger('resize', {fullscreen: 'off'});
+					}
+				} else {
+					$(elm).addClass(cls + ' ' + clsN)
+						.attr('style', 'width:100%; height:100%; margin:0; padding:0;')
+						.trigger('resize', {fullscreen: 'on'});
+					win.on('resize.' + namespace, resize);
+					checkDialog();
+				}
+				win.trigger('resize');
+			}
+		});
+		
+		/**
+		 * Toggle Full Scrren Mode
+		 * 
+		 * @param  Object target
+		 * @param  Bool   full
+		 * @return Object | Null  DOM node object of current full scrren
+		 */
+		self.toggleFullscreen = function(target, full) {
+			var elm = $(target).get(0),
+				curElm = null;
+			
+			curElm = funcObj.fullElm();
+			if (curElm) {
+				if (curElm == elm) {
+					if (full === true) {
+						return curElm;
+					}
+				} else {
+					if (full === false) {
+						return curElm;
+					}
+				}
+				funcObj.exitFull();
+				return null;
+			} else {
+				if (full === false) {
+					return null;
+				}
+			}
+			
+			orgStyle = {elm: elm, style: $(elm).attr('style')};
+			if (funcObj.toFull(elm) !== false) {
+				return elm;
+			} else {
+				orgStyle = null;
+				return null;
+			}
+		};
+	})();
+	
+	// Closure for toggleMaximize
+	(function(){
+		var cls = 'elfinder-maximized',
+		resizeTm,
+		resize = function(e) {
+			if (e.target === window && e.data && e.data.elm) {
+				resizeTm && clearTimeout(resizeTm);
+				resizeTm = setTimeout(function() {
+					e.data.elm.trigger('resize', {maximize: 'on'});
+				}, 100);
+			}
+		},
+		exitMax = function(elm) {
+			$(window).off('resize.' + namespace, resize);
+			$('body').css('overflow', elm.data('bodyOvf'));
+			elm.removeClass(cls)
+				.attr('style', elm.data('orgStyle'))
+				.removeData('bodyOvf')
+				.removeData('orgStyle');
+			elm.trigger('resize', {maximize: 'off'});
+		},
+		toMax = function(elm) {
+			elm.data('bodyOvf', $('body').css('overflow') || '')
+				.data('orgStyle', elm.attr('style'))
+				.addClass(cls)
+				.css(self.getMaximizeCss());
+			$('body').css('overflow', 'hidden');
+			$(window).on('resize.' + namespace, {elm: elm}, resize).trigger('resize');
+		};
+		
+		/**
+		 * Toggle Maximize target node
+		 * 
+		 * @param  Object target
+		 * @param  Bool   max
+		 * @return void
+		 */
+		self.toggleMaximize = function(target, max) {
+			var elm = $(target),
+				maximized = elm.hasClass(cls);
+			
+			if (maximized) {
+				if (max === true) {
+					return;
+				}
+				exitMax(elm);
+			} else {
+				if (max === false) {
+					return;
+				}
+				toMax(elm);
+			}
+		};
+	})();
 	
 	/*************  init stuffs  ****************/
 	
@@ -2437,23 +2687,31 @@ window.elFinder = function(node, opts) {
 	if (!$.isArray(this.options.commands)) {
 		this.options.commands = [];
 	}
-	// check required commands
-	$.each(['open', 'reload', 'back', 'forward', 'up', 'home', 'info', 'quicklook', 'getfile', 'help'], function(i, cmd) {
-		var idx = $.inArray(cmd, self.options.commands);
-		if (cmd === 'getfile' && ! self.options.getFileCallback) {
-			idx !== -1 && self.options.commands.splice(idx, 1);
-			return true;
-		}
-		idx === -1 && self.options.commands.push(cmd);
-	});
-
+	
+	if ($.inArray('*', this.options.commands) !== -1) {
+		this.options.commands = Object.keys(this.commands);
+	}
+	
 	// load commands
-	$.each(this.options.commands, function(i, name) {
-		var cmd = self.commands[name];
-		if ($.isFunction(cmd) && !self._commands[name]) {
-			cmd.prototype = base;
+	$.each(this.commands, function(name, cmd) {
+		var extendsCmd, opts;
+		if ($.isFunction(cmd) && !self._commands[name] && (cmd.prototype.forceLoad || $.inArray(name, self.options.commands) !== -1)) {
+			extendsCmd = cmd.prototype.extendsCmd || '';
+			if (extendsCmd) {
+				if ($.isFunction(self.commands[extendsCmd])) {
+					cmd.prototype = $.extend({}, base, new self.commands[extendsCmd](), cmd.prototype);
+				} else {
+					return true;
+				}
+			} else {
+				cmd.prototype = $.extend({}, base, cmd.prototype);
+			}
 			self._commands[name] = new cmd();
-			self._commands[name].setup(name, self.options.commandsOptions[name]||{});
+			opts = self.options.commandsOptions[name] || {};
+			if (extendsCmd && self.options.commandsOptions[extendsCmd]) {
+				opts = $.extend(true, {}, self.options.commandsOptions[extendsCmd], opts);
+			}
+			self._commands[name].setup(name, opts);
 			// setup linked commands
 			if (self._commands[name].linkedCmds.length) {
 				$.each(self._commands[name].linkedCmds, function(i, n) {
@@ -2567,6 +2825,9 @@ window.elFinder = function(node, opts) {
 	this.options.resizable 
 	&& $.fn.resizable 
 	&& node.resizable({
+		resize    : function(e, ui) {
+			self.resize(ui.size.width, ui.size.height);
+		},
 		handles   : 'se',
 		minWidth  : 300,
 		minHeight : 200
@@ -2648,11 +2909,13 @@ window.elFinder = function(node, opts) {
 
 	(function(){
 		var tm;
-		$(window).on('resize.' + namespace, function(){
-			tm && clearTimeout(tm);
-			tm = setTimeout(function() {
-				self.trigger('resize', {width : node.width(), height : node.height()});
-			}, 200);
+		$(window).on('resize.' + namespace, function(e){
+			if (e.target === this) {
+				tm && clearTimeout(tm);
+				tm = setTimeout(function() {
+					self.trigger('resize', {width : node.width(), height : node.height()});
+				}, 100);
+			}
 		})
 		.on('beforeunload.' + namespace,function(e){
 			var msg, cnt;
@@ -2939,6 +3202,41 @@ elFinder.prototype = {
 	res : function(type, id) {
 		return this.resources[type] && this.resources[type][id];
 	}, 
+
+	/**
+	 * User os. Required to bind native shortcuts for open/rename
+	 *
+	 * @type String
+	 **/
+	OS : navigator.userAgent.indexOf('Mac') !== -1 ? 'mac' : navigator.userAgent.indexOf('Win') !== -1  ? 'win' : 'other',
+	
+	/**
+	 * User browser UA.
+	 * jQuery.browser: version deprecated: 1.3, removed: 1.9
+	 *
+	 * @type Object
+	 **/
+	UA : (function(){
+		var webkit = !document.uniqueID && !window.opera && !window.sidebar && window.localStorage && typeof window.orientation == "undefined";
+		return {
+			// Browser IE <= IE 6
+			ltIE6   : typeof window.addEventListener == "undefined" && typeof document.documentElement.style.maxHeight == "undefined",
+			// Browser IE <= IE 7
+			ltIE7   : typeof window.addEventListener == "undefined" && typeof document.querySelectorAll == "undefined",
+			// Browser IE <= IE 8
+			ltIE8   : typeof window.addEventListener == "undefined" && typeof document.getElementsByClassName == "undefined",
+			IE      : document.uniqueID,
+			Firefox : window.sidebar,
+			Opera   : window.opera,
+			Webkit  : webkit,
+			Chrome  : webkit && window.chrome,
+			Safari  : webkit && !window.chrome,
+			Mobile  : typeof window.orientation != "undefined",
+			Touch   : typeof window.ontouchstart != "undefined",
+			iOS     : navigator.platform.match(/^iP(?:[ao]d|hone)/),
+			Fullscreen : (typeof (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen) !== 'undefined')
+		};
+	})(),
 	
 	/**
 	 * Current request command
@@ -3139,7 +3437,7 @@ elFinder.prototype = {
 		}
 		
 		try {
-			data = $.parseJSON(text);
+			data = JSON.parse(text);
 		} catch (e) {
 			return {error : ['errResponse', 'errDataNotJSON']};
 		}
@@ -3238,6 +3536,12 @@ elFinder.prototype = {
 						fm.confirm(opts);
 					};
 					
+					if (! fm.file(target).read) {
+						// for dropbox type
+						dfrd.resolve([]);
+						return;
+					}
+					
 					names = $.map(files, function(file, i) { return file.name? {i: i, name: file.name} : null ;});
 					
 					name = $.map(names, function(item) { return item.name;});
@@ -3278,7 +3582,7 @@ elFinder.prototype = {
 										if (existed.length && target == fm.cwd().hash) {
 											cwdItems = $.map(fm.files(), function(file) { return (file.phash == target) ? file.name : null; } );
 											if ($.map(existed, function(n) { 
-												return cwdItems.indexOf(n) === -1? true : null;
+												return $.inArray(n, cwdItems) === -1? true : null;
 											}).length){
 												fm.sync();
 											}
@@ -4485,6 +4789,9 @@ elFinder.prototype = {
 			name, i18, i18nFolderName, prevId;
 		
 
+		if (data.cwd) {
+			data.cwd = filter(data.cwd);
+		}
 		if (data.files) {
 			data.files = $.map(data.files, filter);
 		} 
@@ -4510,16 +4817,17 @@ elFinder.prototype = {
 	 * @param {String} sort order
 	 * @param {Boolean} show folder first
 	 */
-	setSort : function(type, order, stickFolders) {
+	setSort : function(type, order, stickFolders, alsoTreeview) {
 		this.storage('sortType', (this.sortType = this.sortRules[type] ? type : 'name'));
 		this.storage('sortOrder', (this.sortOrder = /asc|desc/.test(order) ? order : 'asc'));
 		this.storage('sortStickFolders', (this.sortStickFolders = !!stickFolders) ? 1 : '');
+		this.storage('sortAlsoTreeview', (this.sortAlsoTreeview = !!alsoTreeview) ? 1 : '');
 		this.trigger('sortchange');
 	},
 	
 	_sortRules : {
 		name : function(file1, file2) {
-			return elFinder.prototype.naturalCompare(file1.name, file2.name);
+			return elFinder.prototype.naturalCompare(file1.i18 || file1.name, file2.i18 || file2.name);
 		},
 		size : function(file1, file2) { 
 			var size1 = parseInt(file1.size) || 0,

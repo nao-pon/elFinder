@@ -734,7 +734,7 @@ $.fn.elfindercwd = function(fm, options) {
 								htd.data('delta', (htd.outerWidth() - htw) - (btd.outerWidth() - btw));
 							}
 							btw -= htd.data('delta');
-							if (htw === btw) {
+							if (! init && ! opts.fitWidth && htw === btw) {
 								break;
 							}
 							htd.css('width', btw + 'px');
@@ -1874,7 +1874,7 @@ $.fn.elfindercwd = function(fm, options) {
 						var regex = new RegExp(incquery.replace(/([\\*\;\.\?\[\]\{\}\(\)\^\$\-\|])/g, '\\$1'), 'i');
 						incHashes = $.map(cwdHashes, function(hash) {
 							var file = fm.file(hash);
-							return (file && file.name.match(regex))? file.hash : null;
+							return (file && (file.name.match(regex) || (file.i18 && file.i18.match(regex))))? file.hash : null;
 						});
 						fm.trigger('incsearch', { hashes: incHashes, query: incquery })
 							.searchStatus.ininc = true;
