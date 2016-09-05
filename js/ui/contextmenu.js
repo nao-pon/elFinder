@@ -10,6 +10,15 @@ $.fn.elfindercontextmenu = function(fm) {
 		var cmItem = 'elfinder-contextmenu-item',
 			smItem = 'elfinder-contextsubmenu-item',
 			exIcon = 'elfinder-contextmenu-extra-icon',
+			dragOpt = {
+				distance: 8,
+				start: function() {
+					menu.data('touching') && menu.find('.ui-state-hover').removeClass('ui-state-hover');
+				},
+				stop: function() {
+					menu.data('draged', true);
+				}
+			},
 			menu = $(this).addClass('touch-punch ui-helper-reset ui-front ui-widget ui-state-default ui-corner-all elfinder-contextmenu elfinder-contextmenu-'+fm.direction)
 				.hide()
 				.on('touchstart', function(e) {
@@ -33,22 +42,18 @@ $.fn.elfindercontextmenu = function(fm) {
 						menu.removeData('draged');
 					}, 100);
 				})
-				.draggable({
-					distance: 8,
-					start: function() {
-						menu.data('touching') && menu.find('.ui-state-hover').removeClass('ui-state-hover');
-					},
-					stop: function() {
-						menu.data('draged', true);
-					}
-				}),
+				.draggable(dragOpt),
 			subpos  = fm.direction == 'ltr' ? 'left' : 'right',
 			types = $.extend({}, fm.options.contextmenu),
-			tpl     = '<div class="'+cmItem+'"><span class="elfinder-button-icon {icon} elfinder-contextmenu-icon"{style}/><span>{label}</span></div>',
+			tpl     = '<div class="'+cmItem+'{className}"><span class="elfinder-button-icon {icon} elfinder-contextmenu-icon"{style}/><span>{label}</span></div>',
 			item = function(label, icon, callback, opts) {
-				var style = '',
+				var className = '',
+					style = '',
 					iconClass = '';
 				if (opts) {
+					if (opts.className) {
+						className = ' ' + opts.className;
+					}
 					if (opts.iconClass) {
 						iconClass = opts.iconClass;
 						icon = '';
@@ -57,7 +62,10 @@ $.fn.elfindercontextmenu = function(fm) {
 						style = ' style="background:url(\''+fm.escape(opts.iconImg)+'\') 0 0 no-repeat;background-size:contain;"';
 					}
 				}
-				return $(tpl.replace('{icon}', icon ? 'elfinder-button-icon-'+icon : (iconClass? iconClass : '')).replace('{label}', label).replace('{style}', style))
+				return $(tpl.replace('{icon}', icon ? 'elfinder-button-icon-'+icon : (iconClass? iconClass : ''))
+						.replace('{label}', label)
+						.replace('{style}', style)
+						.replace('{className}', className))
 					.click(function(e) {
 						e.stopPropagation();
 						e.preventDefault();
@@ -104,24 +112,26 @@ $.fn.elfindercontextmenu = function(fm) {
 				}
 			},
 			
-			open = function(x, y) {
+			open = function(x, y, css) {
 				var width      = menu.outerWidth(),
 					height     = menu.outerHeight(),
+					bstyle     = base.attr('style'),
 					bpos       = base.offset(),
 					bwidth     = base.width(),
 					bheight    = base.height(),
 					mw         = fm.UA.Mobile? 40 : 2,
 					mh         = fm.UA.Mobile? 20 : 2,
-					body       = $('body'),
 					x          = x - (bpos? bpos.left : 0),
 					y          = y - (bpos? bpos.top : 0),
-					css        = {
+					css        = $.extend(css || {}, {
 						top  : Math.max(0, y + mh + height < bheight ? y + mh : y - (y + height - bheight)),
 						left : Math.max(0, (x < width + mw || x + mw + width < bwidth)? x + mw : x - mw - width),
 						opacity : '1'
-					};
+					});
 
-				menu.stop().attr('style', '').css(css).show();
+				base.width(bwidth);
+				menu.stop().removeAttr('style').css(css).show();
+				base.attr('style', bstyle);
 				
 				css[subpos] = parseInt(menu.width());
 				menu.find('.elfinder-contextmenu-sub').css(css);
@@ -132,10 +142,25 @@ $.fn.elfindercontextmenu = function(fm) {
 			},
 			
 			close = function() {
-				menu.hide().empty().removeData('submenuKeep');
-				fm.trigger('closecontextmenu');
-				if (fm.UA.iOS) {
-					$('div.elfinder div.overflow-scrolling-touch').css('-webkit-overflow-scrolling', 'touch');
+				if (menu.is(':visible') || menu.children().length) {
+					menu.removeAttr('style').hide().empty().removeData('submenuKeep');
+					try {
+						if (! menu.draggable('instance')) {
+							menu.draggable(dragOpt);
+						}
+					} catch(e) {
+						if (! menu.hasClass('ui-draggable')) {
+							menu.draggable(dragOpt);
+						}
+					}
+					if (menu.data('prevNode')) {
+						menu.data('prevNode').after(menu);
+						menu.removeData('prevNode');
+					}
+					fm.trigger('closecontextmenu');
+					if (fm.UA.iOS) {
+						$('div.elfinder div.overflow-scrolling-touch').css('-webkit-overflow-scrolling', 'touch');
+					}
 				}
 			},
 			
@@ -182,14 +207,14 @@ $.fn.elfindercontextmenu = function(fm) {
 					if (cmdMap[name]) {
 						name = cmdMap[name];
 					}
-					cmd = fm.command(name);
+					cmd = fm.getCommand(name);
 
 					if (cmd && !isCwd && (!fm.searchStatus.state || !cmd.disableOnSearch)) {
 						cmd.__disabled = cmd._disabled;
 						cmd._disabled = !(cmd.alwaysEnabled || (fm._commands[name] ? $.inArray(name, disabled) === -1 : false));
 						$.each(cmd.linkedCmds, function(i, n) {
 							var c;
-							if (c = fm.command(n)) {
+							if (c = fm.getCommand(n)) {
 								c.__disabled = c._disabled;
 								c._disabled = !(c.alwaysEnabled || (fm._commands[n] ? $.inArray(n, disabled) === -1 : false));
 							}
@@ -211,28 +236,31 @@ $.fn.elfindercontextmenu = function(fm) {
 								if (! show) {
 									submenu.hide();
 								} else {
+									var bstyle = base.attr('style');
+									base.width(base.width());
 									submenu.css({ left: 'auto', right: 'auto' });
 									var nodeOffset = node.offset(),
-										baseleft   = nodeOffset.left,
-										basetop    = nodeOffset.top,
-										basewidth  = node.outerWidth(),
-										width      = submenu.outerWidth(),
-										height     = submenu.outerHeight(),
+										nodeleft   = nodeOffset.left,
+										nodetop    = nodeOffset.top,
+										nodewidth  = node.outerWidth(),
+										width      = submenu.outerWidth(true),
+										height     = submenu.outerHeight(true),
 										baseOffset = base.offset(),
 										wwidth     = baseOffset.left + base.width(),
 										wheight    = baseOffset.top + base.height(),
 										x, y, over;
 	
-									over = (baseleft + basewidth + width) - wwidth;
-									x = (baseleft > width && over > 0)? (fm.UA.Mobile? 10 - width : basewidth - over) : basewidth;
-									if (subpos === 'right' && baseleft < width) {
-										x = fm.UA.Mobile? 30 - basewidth : basewidth - (width - baseleft);
+									over = (nodeleft + nodewidth + width) - wwidth;
+									x = (nodeleft > width && over > 0)? (fm.UA.Mobile? 10 - width : nodewidth - over) : nodewidth;
+									if (subpos === 'right' && nodeleft < width) {
+										x = fm.UA.Mobile? 30 - nodewidth : nodewidth - (width - nodeleft);
 									}
-									over = (basetop + 5 + height) - wheight;
-									y = (over > 0 && basetop < wheight)? 10 - over : (over > 0? 30 - height : 5);
+									over = (nodetop + 5 + height) - wheight;
+									y = (over > 0 && nodetop < wheight)? 5 - over : (over > 0? 30 - height : 5);
 	
 									menu.find('.elfinder-contextmenu-sub:visible').hide().parent().removeClass('ui-state-hover');
 									submenu.css({ top : y }).css(subpos, x).show();
+									base.attr('style', bstyle);
 								}
 							};
 							
@@ -254,6 +282,7 @@ $.fn.elfindercontextmenu = function(fm) {
 										if ($.isPlainObject(opts)) {
 											opts._currentType = type;
 										}
+										close();
 										cmd.exec(targets, opts);
 									}
 								})
@@ -320,7 +349,7 @@ $.fn.elfindercontextmenu = function(fm) {
 						delete cmd.__disabled;
 						$.each(cmd.linkedCmds, function(i, n) {
 							var c;
-							if (c = fm.command(n)) {
+							if (c = fm.getCommand(n)) {
 								c._disabled = c.__disabled;
 								delete c.__disabled;
 							}
@@ -351,7 +380,9 @@ $.fn.elfindercontextmenu = function(fm) {
 			base = fm.getUI();
 			cwd = fm.getUI('cwd');
 			fm.bind('contextmenu', function(e) {
-				var data = e.data;
+				var data = e.data,
+					css = {},
+					prevNode;
 
 				if (!data.type || data.type !== 'files') {
 					cwd.trigger('unselectall');
@@ -364,7 +395,18 @@ $.fn.elfindercontextmenu = function(fm) {
 					createFromRaw(data.raw);
 				}
 
-				menu.children().length && open(data.x, data.y);
+				if (menu.children().length) {
+					prevNode = data.prevNode || null;
+					if (prevNode) {
+						menu.data('prevNode', menu.prev());
+						prevNode.after(menu);
+					}
+					if (data.fitHeight) {
+						css = {maxHeight: Math.min(fm.getUI().height(), $(window).height()), overflowY: 'auto'};
+						menu.draggable('destroy').removeClass('ui-draggable');
+					}
+					open(data.x, data.y, css);
+				}
 			})
 			.one('destroy', function() { menu.remove(); })
 			.bind('disable select', function(){

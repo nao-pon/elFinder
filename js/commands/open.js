@@ -48,7 +48,8 @@
 				: fm.request({
 						data   : {cmd  : 'open', target : thash || file.hash},
 						notify : {type : 'open', cnt : 1, hideCnt : true},
-						syncOnFail : true
+						syncOnFail : true,
+						lazy : false
 					});
 		}
 		
@@ -167,7 +168,7 @@
 						dfrd.reject();
 					}
 				},
-				buttons : (fm.command('zipdl') && fm.isCommandEnabled('zipdl', fm.cwd().hash))? [
+				buttons : (fm.getCommand('zipdl') && fm.isCommandEnabled('zipdl', fm.cwd().hash))? [
 					{
 						label : 'cmddownload',
 						callback : function() {

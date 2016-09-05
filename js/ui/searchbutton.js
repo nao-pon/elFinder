@@ -140,7 +140,7 @@ $.fn.elfindersearchbutton = function(cmd) {
 			.click(abort);
 		
 		// wait when button will be added to DOM
-		toolbar.on('load', function(){
+		fm.bind('toolbarload', function(){
 			var parent = button.parent();
 			if (parent.length) {
 				toolbar.prepend(button.show());
@@ -174,7 +174,6 @@ $.fn.elfindersearchbutton = function(cmd) {
 							)
 					)
 					.hide()
-					.css('overflow', 'hidden')
 					.appendTo(button);
 				if (opts) {
 					opts.find('div.buttonset').buttonset();

@@ -35,20 +35,51 @@ elFinder.prototype.commands.upload = function() {
 	
 	this.exec = function(data) {
 		var fm = this.fm,
-			targets = data && (data instanceof Array)? data : null,
-			check  = !targets && data && data.target? [ data.target ] : targets,
+			cwdHash = fm.cwd().hash,
+			getTargets = function() {
+				var tgts = data && (data instanceof Array)? data : null,
+					sel;
+				if (! data) {
+					if (! tgts && (sel = fm.selected()).length === 1 && fm.file(sel[0]).mime === 'directory') {
+						tgts = sel;
+					} else {
+						tgts = [ cwdHash ];
+					}
+				}
+				return tgts;
+			},
+			targets = getTargets(),
+			check = !targets && data && data.target? data.target : targets[0],
+			targetDir = check? fm.file(check) : fm.cwd(),
 			fmUpload = function(data) {
 				fm.upload(data)
 					.fail(function(error) {
 						dfrd.reject(error);
 					})
 					.done(function(data) {
-						var cwd = fm.getUI('cwd');
+						var cwd = fm.getUI('cwd'),
+							node;
 						dfrd.resolve(data);
 						if (data && data.added && data.added[0]) {
 							var newItem = cwd.find('#'+fm.cwdHash2Id(data.added[0].hash));
 							if (newItem.length) {
 								newItem.trigger('scrolltoview');
+							} else {
+								if (targetDir.hash !== cwdHash) {
+									node = $('<div/>').append(
+										$('<button type="button" class="ui-button ui-widget ui-state-default ui-corner-all"><span class="ui-button-text">'+fm.i18n('cmdopendir')+'</span></button>')
+										.on('mouseenter mouseleave', function(e) { 
+											$(this).toggleClass('ui-state-hover', e.type == 'mouseenter');
+										}).on('click', function() {
+											fm.exec('open', check).done(function() {
+												fm.one('opendone', function() {
+													fm.trigger('selectfiles', {files : $.map(data.added, function(f) {return f.hash;})});
+												});
+											});
+										})
+									);
+								}
+								fm.toast({msg: fm.i18n(['complete', fm.i18n('cmdupload')]), extNode: node});
 							}
 						}
 					});
@@ -60,17 +91,55 @@ elFinder.prototype.commands.upload = function() {
 				}
 				fmUpload(data);
 			},
-			dfrd = $.Deferred().always(function() {
-				//setTimeout(function() {
-				//	fm.autoSync();
-				//}, 1000);
-			}),
-			dialog, input, button, dropbox, pastebox, dropUpload, paste;
-		
-		//fm.autoSync('stop');
-		if (this.getstate(check) < 0) {
-			return dfrd.reject();
-		}
+			getSelector = function() {
+				var hash = targetDir.hash,
+					dirs = $.map(fm.files(), function(f) {
+						return (f.mime === 'directory' && f.write && f.phash && f.phash === hash)? f : null; 
+					});
+				
+				if (! dirs.length) {
+					return $();
+				}
+				
+				return $('<div class="elfinder-upload-dirselect" title="' + fm.i18n('folders') + '"/>')
+				.on('click', function(e) {
+					e.stopPropagation();
+					e.preventDefault();
+					dirs = fm.sortFiles(dirs);
+					var cwd    = fm.cwd(),
+						base   = dialog.closest('div.ui-dialog'),
+						getRaw = function(f, icon) {
+							return {
+								label    : fm.escape(f.i18 || f.name),
+								icon     : icon,
+								remain   : false,
+								callback : function() {
+									var title = base.children('.ui-dialog-titlebar:first').children('span.elfinder-upload-target');
+									targets = [ f.hash ];
+									title.html(' - ' + fm.escape(f.i18 || f.name));
+								},
+								options  : {
+									className : (targets && targets.length && f.hash === targets[0])? 'ui-state-active' : '',
+									iconClass : f.csscls || '',
+									iconImg   : f.icon   || ''
+								}
+							}
+						},
+						raw = [ getRaw(targetDir, 'opendir'), '|' ];
+					$.each(dirs, function(i, f) {
+						raw.push(getRaw(f, 'dir'));
+					});
+					fm.trigger('contextmenu', {
+						raw: raw,
+						x: e.pageX,
+						y: e.pageY,
+						prevNode: base,
+						fitHeight: true
+					});
+				}).append('<span class="elfinder-button-icon elfinder-button-icon-dir" />');
+			},
+			dfrd = $.Deferred(),
+			dialog, input, button, dropbox, pastebox, dropUpload, paste, dirs, spinner;
 		
 		dropUpload = function(e) {
 			e.stopPropagation();
@@ -206,6 +275,25 @@ elFinder.prototype.commands.upload = function() {
 				pastebox.removeClass(hover);
 			});
 		
+		if (targetDir.dirs) {
+			if (targetDir.hash === cwdHash || $('#'+fm.navHash2Id(targetDir.hash)).hasClass('elfinder-subtree-loaded')) {
+				getSelector().appendTo(dialog);
+			} else {
+				spinner = $('<div class="elfinder-upload-dirselect" title="' + fm.i18n('nowLoading') + '"/>')
+					.append('<span class="elfinder-button-icon elfinder-button-icon-spinner" />')
+					.appendTo(dialog);
+				fm.request({cmd : 'tree', target : targetDir.hash})
+					.done(function() { 
+						fm.one('treedone', function() {
+							spinner.replaceWith(getSelector());
+						});
+					})
+					.fail(function() {
+						spinner.remove();
+					});
+			}
+		}
+		
 		if (fm.dragUpload) {
 			dropbox = $('<div class="ui-corner-all elfinder-upload-dropbox" contenteditable="true">'+fm.i18n('dropPasteFiles')+'</div>')
 				.on('paste', function(e){
@@ -259,7 +347,7 @@ elFinder.prototype.commands.upload = function() {
 		}
 		
 		fm.dialog(dialog, {
-			title          : this.title + (targets? ' - ' + fm.escape(fm.file(targets[0]).name) : ''),
+			title          : this.title + '<span class="elfinder-upload-target">' + (targetDir? ' - ' + fm.escape(targetDir.i18 || targetDir.name) : '') + '</span>',
 			modal          : true,
 			resizable      : false,
 			destroyOnClose : true
