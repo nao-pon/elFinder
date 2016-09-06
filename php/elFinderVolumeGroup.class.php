@@ -24,6 +24,8 @@ class elFinderVolumeGroup extends elFinderVolumeDriver {
 	public function __construct() {
 		$this->options['type'] = 'group';
 		$this->options['path'] = '/';
+		$this->options['dirUrlOwn'] = true;
+		$this->options['syncMinMs'] = 0;
 		$this->options['disabled'] = array(
 			'archive',
 			'cut',
@@ -114,12 +116,13 @@ class elFinderVolumeGroup extends elFinderVolumeDriver {
 		if ($path === '/') {
 			return array(
 				'size'   => 0,
-				'ts'     => time(),
+				'ts'     => 0,
 				'mime'   => 'directory',
 				'read'   => true,
 				'write'  => false,
 				'locked' => true,
-				'hidden' => false
+				'hidden' => false,
+				'dirs'   => 0
 			);
 		}
 		return false;
