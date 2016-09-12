@@ -387,7 +387,7 @@ window.elFinder = function(node, opts) {
 					&& shortcut.shiftKey == e.shiftKey 
 					&& shortcut.ctrlKey  == ctrlKey 
 					&& shortcut.altKey   == e.altKey) {
-						e.preventDefault()
+						e.preventDefault();
 						e.stopPropagation();
 						shortcut.callback(e, self);
 						self.debug('shortcut-exec', i+' : '+shortcut.description);
@@ -395,19 +395,23 @@ window.elFinder = function(node, opts) {
 				});
 				
 				// prevent tab out of elfinder
-				if (code == 9 && !$(e.target).is(':input')) {
+				if (code == $.ui.keyCode.TAB && !$(e.target).is(':input')) {
 					e.preventDefault();
 				}
 				
 				// cancel any actions by [Esc] key
-				if (code == 27) {
+				if (e.type === 'keydown' && code == $.ui.keyCode.ESCAPE) {
 					// copy or cut 
-					self.clipboard().length && self.clipboard([]);
+					if (! node.find('.ui-widget:visible').length) {
+						self.clipboard().length && self.clipboard([]);
+					}
 					// dragging
 					if ($.ui.ddmanager) {
 						ddm = $.ui.ddmanager.current;
-						ddm && ddm.cancel();
+						ddm && ddm.helper && ddm.cancel();
 					}
+					// button menus
+					node.find('.ui-widget.elfinder-button-menu').hide();
 				}
 
 			}
@@ -744,7 +748,8 @@ window.elFinder = function(node, opts) {
 	
 	// draggable closure
 	(function() {
-		var ltr, wzRect, wzBottom, nodeStyle;
+		var ltr, wzRect, wzBottom, nodeStyle,
+			keyEvt = keydown + 'draggable' + ' keyup.' + namespace + 'draggable';
 
 		/**
 		 * Base draggable options
@@ -753,7 +758,7 @@ window.elFinder = function(node, opts) {
 		 **/
 		self.draggable = {
 			appendTo   : node,
-			addClasses : true,
+			addClasses : false,
 			distance   : 4,
 			revert     : true,
 			refreshPositions : false,
@@ -823,6 +828,7 @@ window.elFinder = function(node, opts) {
 				var helper = ui.helper,
 					files;
 				
+				$(document).off(keyEvt);
 				$(this).elfUiWidgetInstance('draggable') && $(this).draggable('option', { refreshPositions : false });
 				self.draggingUiHelper = null;
 				self.trigger('focus').trigger('dragstop');
@@ -865,7 +871,7 @@ window.elFinder = function(node, opts) {
 					helper.append(icon(files[hashes[l-1]]) + '<span class="elfinder-drag-num">'+l+'</span>');
 				}
 				
-				$(document).on(keydown + ' keyup.' + namespace, function(e){
+				$(document).on(keyEvt, function(e){
 					var chk = (e.shiftKey||e.ctrlKey||e.metaKey);
 					if (ctr !== chk) {
 						ctr = chk;
@@ -905,7 +911,7 @@ window.elFinder = function(node, opts) {
 				c       = 'class',
 				cnt, hash, i, h;
 			
-			if (ui.helper.data('namespace') !== namespace || ! self.insideWorkzone(e.pageX, e.pageY)) {
+			if (typeof e.button === 'undefined' || ui.helper.data('namespace') !== namespace || ! self.insideWorkzone(e.pageX, e.pageY)) {
 				return false;
 			}
 			if (dst.hasClass(self.res(c, 'cwdfile'))) {
@@ -968,6 +974,16 @@ window.elFinder = function(node, opts) {
 	this.visible = function() {
 		return node[0].elfinder && node.is(':visible');
 	};
+	
+	/**
+	 * Return file is root?
+	 * 
+	 * @param  Object  target file object
+	 * @return Boolean
+	 */
+	this.isRoot = function(file) {
+		return (file.isroot || ! file.phash)? true : false;
+	}
 	
 	/**
 	 * Return root dir hash for current working directory
@@ -1428,9 +1444,9 @@ window.elFinder = function(node, opts) {
 						break;
 					default:
 						if (xhr.status == 403) {
-							error = ['errConnect', 'errAccess'];
+							error = ['errConnect', 'errAccess', 'HTTP error ' + xhr.status];
 						} else if (xhr.status == 404) {
-							error = ['errConnect', 'errNotFound'];
+							error = ['errConnect', 'errNotFound', 'HTTP error ' + xhr.status];
 						} else {
 							if (xhr.status == 414 && options.type === 'get') {
 								// retry by POST method
@@ -1678,7 +1694,7 @@ window.elFinder = function(node, opts) {
 			} else {
 				$.each(file, function(prop) {
 					if (! excludeProps || $.inArray(prop, excludeProps) === -1) {
-						if (file[prop] != origin[prop]) {
+						if (file[prop] !== origin[prop]) {
 							changed.push(file)
 							return false;
 						}
@@ -1745,7 +1761,7 @@ window.elFinder = function(node, opts) {
 				while(phash) {
 					if (pdir = self.file(phash)) {
 						if (phash.indexOf(curId) !== 0) {
-							if (! pdir.isroot || pdir.phash) {
+							if (! self.isRoot(pdir)) {
 								parents.push( {target: phash, cmd: 'tree'} );
 							}
 							parents.push( {target: phash, cmd: 'parents'} );
@@ -1968,7 +1984,7 @@ window.elFinder = function(node, opts) {
 				parts   = pattern.split('+');
 				code    = (code = parts.pop()).length == 1 
 					? code > 0 ? code : code.charCodeAt(0) 
-					: $.ui.keyCode[code];
+					: (code > 0 ? code : $.ui.keyCode[code]);
 
 				if (code && !shortcuts[pattern]) {
 					shortcuts[pattern] = {
@@ -3169,12 +3185,9 @@ window.elFinder = function(node, opts) {
 			},
 			ent       = 'native-drag-enter',
 			disable   = 'native-drag-disable',
-			tm        = 'native-drag-timer',
 			c         = 'class',
 			navdir    = self.res(c, 'navdir'),
 			droppable = self.res(c, 'droppable'),
-			collapsed = self.res(c, 'navcollapse'),
-			expanded  = self.res(c, 'navexpand'),
 			dropover  = self.res(c, 'adroppable'),
 			arrow     = self.res(c, 'navarrow'),
 			clDropActive = self.res(c, 'adroppable'),
@@ -3256,12 +3269,6 @@ window.elFinder = function(node, opts) {
 						e.stopPropagation();
 						$elm.data(ent, true);
 						$elm.addClass(clDropActive);
-						if (!cwd && $elm.hasClass(navdir) && $elm.is('.'+collapsed+':not(.'+expanded+')')) {
-							$elm.data(tm) && clearTimeout($elm.data(tm));
-							$elm.data(tm, setTimeout(function() {
-								$elm.is('.'+collapsed+'.'+dropover) && $elm.children('.'+arrow).click();
-							}, 500));
-						}
 					} else {
 						$elm.data(disable, true);
 					}
@@ -3272,8 +3279,6 @@ window.elFinder = function(node, opts) {
 					var $elm = $(e.currentTarget);
 					e.preventDefault();
 					e.stopPropagation();
-					$elm.data(tm) && clearTimeout($elm.data(tm));
-					$elm.removeData(tm)
 					if ($elm.data(ent)) {
 						$elm.data(ent, false);
 					} else {
@@ -3291,7 +3296,7 @@ window.elFinder = function(node, opts) {
 				}
 			})
 			.on('drop', '.native-droppable', function(e){
-				if (e.originalEvent.dataTransfer) {
+				if (e.originalEvent && e.originalEvent.dataTransfer) {
 					var $elm = $(e.currentTarget)
 						id;
 					e.preventDefault();
@@ -4652,7 +4657,7 @@ elFinder.prototype = {
 						self.trigger('upload', data);
 						data.sync && self.sync();
 					}),
-				name = 'iframe-'+namespace+(++self.iframeCnt),
+				name = 'iframe-'+fm.namespace+(++self.iframeCnt),
 				form = $('<form action="'+self.uploadURL+'" method="post" enctype="multipart/form-data" encoding="multipart/form-data" target="'+name+'" style="display:none"><input type="hidden" name="cmd" value="upload" /></form>'),
 				msie = this.UA.IE,
 				// clear timeouts, close notification dialog, remove form/iframe
@@ -4962,7 +4967,7 @@ elFinder.prototype = {
 									self.volOptions[file.volumeid].tmbUrl = file.tmbUrl;
 								}
 							}
-							if (! file.phash || file.isroot) {
+							if (self.isRoot(file)) {
 								self.roots[file.volumeid] = file.hash;
 							}
 							
@@ -4973,7 +4978,7 @@ elFinder.prototype = {
 						}
 						
 						// volume root i18n name
-						if (! file.i18 && ! file.phash) {
+						if (! file.i18 && self.isRoot(file)) {
 							name = 'volume_' + file.name,
 							i18 = self.i18n(false, name);
 	
@@ -5000,7 +5005,7 @@ elFinder.prototype = {
 							// set ts
 							$.each(self.leafRoots[file.hash], function() {
 								var f = self.file(this);
-								if (f.ts && (file.ts || 0) < f.ts) {
+								if (f && f.ts && (file.ts || 0) < f.ts) {
 									file.ts = f.ts;
 								}
 							});

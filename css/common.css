@@ -2,6 +2,11 @@
 /*            COMMON ELFINDER STUFFS         */
 /*********************************************/
 
+/* for old jQuery UI */
+.ui-front {
+    z-index: 100;
+}
+
 /* common container */
 .elfinder {
 	padding: 0;
@@ -157,5 +162,10 @@
 /* for html5 drag and drop */
 [draggable=true] {
 	-khtml-user-drag: element;
+}
+
+/* for place holder to content editable elements */ 
+.elfinder [contentEditable=true]:empty:not(:focus):before {
+	content:attr(data-ph);
 }
 
