@@ -337,7 +337,11 @@ class elFinder {
 	 */
 	public function __construct($opts) {
 		// set error handler of WARNING, NOTICE
-		set_error_handler('elFinder::phpErrorHandler', E_WARNING | E_NOTICE | E_USER_WARNING | E_USER_NOTICE);
+		$errLevel = E_WARNING | E_NOTICE | E_USER_WARNING | E_USER_NOTICE | E_STRICT | E_RECOVERABLE_ERROR;
+		if (defined('E_DEPRECATED')) {
+			$errLevel |= E_DEPRECATED | E_USER_DEPRECATED;
+		}
+		set_error_handler('elFinder::phpErrorHandler', $errLevel);
 		
 		// convert PATH_INFO to GET query
 		if (! empty($_SERVER['PATH_INFO'])) {
@@ -3273,7 +3277,7 @@ class elFinder {
 	
 		if ($dlurl) {
 			$url = parse_url($dlurl);
-			$cookies = [];
+			$cookies = array();
 			if ($data['cookies']) {
 				foreach ($data['cookies'] as $d => $c) {
 					if (strpos($url['host'], $d) !== false) {
