@@ -13,7 +13,7 @@ $.fn.elfinderworkzone = function(fm) {
 			parent = wz.parent(),
 			fitsize = function() {
 				var height = parent.height() - wdelta,
-					ovf    = parent.css('overflow'),
+					style  = parent.attr('style'),
 					curH   = Math.round(wz.height());
 	
 				parent.css('overflow', 'hidden')
@@ -24,7 +24,7 @@ $.fn.elfinderworkzone = function(fm) {
 							height -= ch.outerHeight(true);
 						}
 					});
-				parent.css('overflow', ovf);
+				parent.attr('style', style || '');
 				
 				height = Math.max(0, Math.round(height));
 				if (prevH !== height || curH !== height) {
@@ -35,7 +35,13 @@ $.fn.elfinderworkzone = function(fm) {
 			};
 			
 		parent.add(window).on('resize.' + fm.namespace, fitsize);
-		fm.bind('uiresize', fitsize);
+		fm.one('cssloaded', function() {
+			var old = wdelta;
+			wdelta = wz.outerHeight(true) - wz.height();
+			if (old !== wdelta) {
+				fm.trigger('uiresize');
+			}
+		}).bind('uiresize', fitsize);
 	});
 	return this;
 };

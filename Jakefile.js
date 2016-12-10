@@ -61,7 +61,8 @@ var dirmode = 0755,
 				path.join(src, 'LICENSE.md'),
 				path.join(src, 'README.md'),
 				path.join(src, 'composer.json'),
-				path.join(src, 'elfinder.html')
+				path.join(src, 'elfinder.html'),
+				path.join(src, 'main.default.js')
 			]
 			.concat(grep(path.join(src, 'js', 'extras'), '\\.js$'))
 	};
@@ -202,7 +203,24 @@ file({'js/elfinder.full.js': files['elfinder.full.js']}, function(){
 		data += fs.readFileSync(file);
 		data = data.replace(strict, '');
 	}
-	data = '(function($) {\n' + data + '\n})(jQuery);'; // add closure
+	data = "(function(root, factory) {\n" +
+	"	if (typeof define === 'function' && define.amd) {\n" +
+	"		// AMD\n" +
+	"		define(['jquery','jquery-ui'], factory);\n" +
+	"	} else if (typeof exports !== 'undefined') {\n" +
+	"		// CommonJS\n" +
+	"		var $, ui;\n" +
+	"		try {\n" +
+	"			$ = require('jquery');\n" +
+	"			ui = require('jquery-ui');\n" +
+	"		} catch (e) {}\n" +
+	"		module.exports = factory($, ui);\n" +
+	"	} else {\n" +
+	"		// Browser globals (Note: root is window)\n" +
+	"		factory(root.jQuery, root.jQuery.ui, true);\n" +
+	"	}\n" +
+	"}(this, function($, _ui, toGlobal) {\n" +
+	"toGlobal = toGlobal || false;\n" + data + '\nreturn elFinder;\n}));'; // add UMD closure
 	fs.writeFileSync(this.name, buildComment() + data);
 });
 
