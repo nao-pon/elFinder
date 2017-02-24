@@ -26,7 +26,13 @@ class elFinder {
 	protected $volumes = array();
 	
 	public static $netDrivers = array();
-
+	
+	/**
+	 * Session key of net mount volumes
+	 * @var string
+	 */
+	protected $netVolumesSessionKey = '';
+	
 	/**
 	 * Mounted volumes count
 	 * Required to create unique volume id
@@ -61,7 +67,7 @@ class elFinder {
 		'rename'    => array('target' => true, 'name' => true, 'mimes' => false),
 		'duplicate' => array('targets' => true, 'suffix' => false),
 		'paste'     => array('dst' => true, 'targets' => true, 'cut' => false, 'mimes' => false),
-		'upload'    => array('target' => true, 'FILES' => true, 'mimes' => false, 'html' => false),
+		'upload'    => array('target' => true, 'FILES' => true, 'mimes' => false, 'html' => false, 'upload' => false, 'name' => false, 'upload_path' => false),
 		'get'       => array('target' => true),
 		'put'       => array('target' => true, 'content' => '', 'mimes' => false),
 		'archive'   => array('targets' => true, 'type' => true, 'mimes' => false),
@@ -70,8 +76,17 @@ class elFinder {
 		'info'      => array('targets' => true),
 		'dim'       => array('target' => true),
 		'resize'    => array('target' => true, 'width' => true, 'height' => true, 'mode' => false, 'x' => false, 'y' => false, 'degree' => false),
-		'netmount'  => array('protocol' => true, 'host' => true, 'path' => false, 'port' => false, 'user' => true, 'pass' => true, 'alias' => false, 'options' => false)
-	);
+		'netmount'  => array('protocol' => true, 'host' => true, 'path' => false, 'port' => false, 'user' => true, 'pass' => true, 'alias' => false, 'options' => false),
+		'url'       => array('target' => true, 'options' => false),
+		'pixlr'     => array('target' => false, 'node' => false, 'image' => false, 'type' => false, 'title' => false)
+		);
+	
+	/**
+	 * Plugins instance
+	 *
+	 * @var array
+	 **/
+	protected $plugins = array();
 	
 	/**
 	 * Commands listeners
@@ -168,6 +183,7 @@ class elFinder {
 	const ERROR_UNSUPPORT_TYPE    = 'errUsupportType';
 	const ERROR_NOT_UTF8_CONTENT  = 'errNotUTF8Content';
 	const ERROR_NETMOUNT          = 'errNetMount';
+	const ERROR_NETUNMOUNT        = 'errNetUnMount';
 	const ERROR_NETMOUNT_NO_DRIVER = 'errNetMountNoDriver';
 	const ERROR_NETMOUNT_FAILED       = 'errNetMountFailed';
 
@@ -195,13 +211,40 @@ class elFinder {
 		$this->time  = $this->utime();
 		$this->debug = (isset($opts['debug']) && $opts['debug'] ? true : false);
 		$this->timeout = (isset($opts['timeout']) ? $opts['timeout'] : 0);
+		$this->netVolumesSessionKey = !empty($opts['netVolumesSessionKey'])? $opts['netVolumesSessionKey'] : 'elFinderNetVolumes';
 		
 		setlocale(LC_ALL, !empty($opts['locale']) ? $opts['locale'] : 'en_US.UTF-8');
 
 		// bind events listeners
 		if (!empty($opts['bind']) && is_array($opts['bind'])) {
-			foreach ($opts['bind'] as $cmd => $handler) {
-				$this->bind($cmd, $handler);
+			$_req = $_SERVER["REQUEST_METHOD"] == 'POST' ? $_POST : $_GET;
+			$_reqCmd = isset($_req['cmd']) ? $_req['cmd'] : '';
+			foreach ($opts['bind'] as $cmd => $handlers) {
+				$doRegist = (strpos($cmd, '*') !== false);
+				if (! $doRegist) {
+					$_getcmd = create_function('$cmd', 'list($ret) = explode(\'.\', $cmd);return trim($ret);');
+					$doRegist = ($_reqCmd && in_array($_reqCmd, array_map($_getcmd, explode(' ', $cmd))));
+				}
+				if ($doRegist) {
+					if (! is_array($handlers) || is_object($handlers[0])) {
+						$handlers = array($handlers);
+					}
+					foreach($handlers as $handler) {
+						if ($handler) {
+							if (is_string($handler) && strpos($handler, '.')) {
+								list($_domain, $_name, $_method) = array_pad(explode('.', $handler), 3, '');
+								if (strcasecmp($_domain, 'plugin') === 0) {
+									if ($plugin = $this->getPluginInstance($_name, isset($opts['plugin'][$_name])? $opts['plugin'][$_name] : array())
+											and method_exists($plugin, $_method)) {
+										$this->bind($cmd, array($plugin, $_method));
+									}
+								}
+							} else {
+								$this->bind($cmd, $handler);
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -274,19 +317,33 @@ class elFinder {
 	 * @author Dmitry (dio) Levashov
 	 **/
 	public function bind($cmd, $handler) {
-		$cmds = $cmd == '*'
-			? array_keys($this->commands)
-			: array_map('trim', explode(' ', $cmd));
+		$allCmds = array_keys($this->commands);
+		$cmds = array();
+		foreach(explode(' ', $cmd) as $_cmd) {
+			if ($_cmd !== '') {
+				if ($all = strpos($_cmd, '*') !== false) {
+					list(, $sub) = array_pad(explode('.', $_cmd), 2, '');
+					if ($sub) {
+						$sub = str_replace('\'', '\\\'', $sub);
+						$addSub = create_function('$cmd', 'return $cmd . \'.\' . trim(\'' . $sub . '\');');
+						$cmds = array_merge($cmds, array_map($addSub, $allCmds));
+					} else {
+						$cmds = array_merge($cmds, $allCmds);
+					}
+				} else {
+					$cmds[] = $_cmd;
+				}
+			}
+		}
+		$cmds = array_unique($cmds);
 		
 		foreach ($cmds as $cmd) {
-			if ($cmd) {
-				if (!isset($this->listeners[$cmd])) {
-					$this->listeners[$cmd] = array();
-				}
+			if (!isset($this->listeners[$cmd])) {
+				$this->listeners[$cmd] = array();
+			}
 
-				if (is_callable($handler)) {
-					$this->listeners[$cmd][] = $handler;
-				}
+			if (is_callable($handler)) {
+				$this->listeners[$cmd][] = $handler;
 			}
 		}
 
@@ -389,6 +446,14 @@ class elFinder {
 			}
 		}
 		
+		// call pre handlers for this command
+		if (!empty($this->listeners[$cmd.'.pre'])) {
+			$volume = isset($args['target'])? $this->volume($args['target']) : false;
+			foreach ($this->listeners[$cmd.'.pre'] as $handler) {
+				call_user_func_array($handler, array($cmd, &$args, $this, $volume));
+			}
+		}
+		
 		$result = $this->$cmd($args);
 		
 		if (isset($result['removed'])) {
@@ -469,7 +534,7 @@ class elFinder {
 	 * @author Dmitry (dio) Levashov
 	 */
 	protected function getNetVolumes() {
-		return isset($_SESSION['elFinderNetVolumes']) && is_array($_SESSION['elFinderNetVolumes']) ? $_SESSION['elFinderNetVolumes'] : array();
+		return isset($_SESSION[$this->netVolumesSessionKey]) && is_array($_SESSION[$this->netVolumesSessionKey]) ? $_SESSION[$this->netVolumesSessionKey] : array();
 	}
 
 	/**
@@ -480,7 +545,30 @@ class elFinder {
 	 * @author Dmitry (dio) Levashov
 	 */
 	protected function saveNetVolumes($volumes) {
-		$_SESSION['elFinderNetVolumes'] = $volumes;
+		$_SESSION[$this->netVolumesSessionKey] = $volumes;
+	}
+
+	/**
+	 * Get plugin instance & set to $this->plugins
+	 * 
+	 * @param  string $name   Plugin name (dirctory name)
+	 * @param  array  $opts   Plugin options (optional)
+	 * @return object | bool Plugin object instance Or false
+	 * @author Naoki Sawada
+	 */
+	protected function getPluginInstance($name, $opts = array()) {
+		$key = strtolower($name);
+		if (! isset($this->plugins[$key])) {
+			$p_file = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'plugins' . DIRECTORY_SEPARATOR . $name . DIRECTORY_SEPARATOR . 'plugin.php';
+			if (is_file($p_file)) {
+				require_once $p_file;
+				$class = 'elFinderPlugin' . $name;
+				$this->plugins[$key] = new $class($opts);
+			} else {
+				$this->plugins[$key] = false;
+			}
+		}
+		return $this->plugins[$key];
 	}
 
 	/***************************************************************************/
@@ -510,10 +598,29 @@ class elFinder {
 	protected function netmount($args) {
 		$options  = array();
 		$protocol = $args['protocol'];
-		$driver   = isset(self::$netDrivers[$protocol]) ? $protocol : '';
-		$class    = 'elfindervolume'.$protocol;
+		
+		if ($protocol === 'netunmount') {
+			if (isset($_SESSION) && is_array($_SESSION) && isset($_SESSION[$this->netVolumesSessionKey][$args['host']])) {
+				$res = true;
+				$netVolumes = $this->getNetVolumes();
+				$key = $args['host'];
+				$volume = $this->volume($args['user']);
+				if (method_exists($volume, 'netunmount')) {
+					$res = $volume->netunmount($netVolumes[$key]);
+				}
+				if ($res) {
+					unset($netVolumes[$key]);
+					$this->saveNetVolumes($netVolumes);
+					return array('sync' => true);
+				}
+			}
+			return array('error' => $this->error(self::ERROR_NETUNMOUNT));
+		}
+		
+		$driver   = isset(self::$netDrivers[$protocol]) ? self::$netDrivers[$protocol] : '';
+		$class    = 'elfindervolume'.$driver;
 
-		if (!$driver) {
+		if (!class_exists($class)) {
 			return array('error' => $this->error(self::ERROR_NETMOUNT, $args['host'], self::ERROR_NETMOUNT_NO_DRIVER));
 		}
 
@@ -534,15 +641,34 @@ class elFinder {
 		}
 
 		$volume = new $class();
-
+		
+		if (method_exists($volume, 'netmountPrepare')) {
+			$options = $volume->netmountPrepare($options);
+			if (isset($options['exit'])) {
+				return $options;
+			}
+		}
+		
+		$netVolumes = $this->getNetVolumes();
 		if ($volume->mount($options)) {
-			$netVolumes        = $this->getNetVolumes();
+			if (! $key = @ $volume->netMountKey) {
+				$key = md5($protocol . '-' . join('-', $options));
+			}
 			$options['driver'] = $driver;
-			$netVolumes[]      = $options;
-			$netVolumes        = array_unique($netVolumes);
+			$options['netkey'] = $key;
+			$netVolumes[$key]  = $options;
 			$this->saveNetVolumes($netVolumes);
-			return array('sync' => true);
+			$rootstat = $volume->file($volume->root());
+			$rootstat['netkey'] = $key;
+			return array('added' => array($rootstat));
 		} else {
+			if (! $key = @ $volume->netMountKey) {
+				$key = md5($protocol . '-' . join('-', $options));
+			}
+			if (isset($netVolumes[$key])) {
+				unset($netVolumes[$key]);
+				$this->saveNetVolumes($netVolumes);
+			}
 			return array('error' => $this->error(self::ERROR_NETMOUNT, $args['host'], implode(' ', $volume->error())));
 		}
 
@@ -615,6 +741,7 @@ class elFinder {
 		if (!empty($args['init'])) {
 			$result['api'] = $this->version;
 			$result['uplMaxSize'] = ini_get('upload_max_filesize');
+			$result['uplMaxFile'] = ini_get('max_file_uploads');
 			$result['netDrivers'] = array_keys(self::$netDrivers);
 		}
 		
@@ -903,6 +1030,198 @@ class elFinder {
 
 		return $result;
 	}
+
+	/**
+	* Get remote contents
+	*
+	* @param  string  $url     target url
+	* @param  int     $timeout timeout (sec)
+	* @param  int     $redirect_max redirect max count
+	* @param  string  $ua
+	* @return string or bool(false)
+	* @retval string contents
+	* @retval false  error
+	* @author Naoki Sawada
+	**/
+	protected function get_remote_contents( $url, $timeout = 30, $redirect_max = 5, $ua = 'Mozilla/5.0' ) {
+		$method = (function_exists('curl_exec') && !ini_get('safe_mode'))? 'curl_get_contents' : 'fsock_get_contents'; 
+		return $this->$method( $url, $timeout, $redirect_max, $ua );
+	}
+	
+	/**
+	 * Get remote contents with cURL
+	 *
+	 * @param  string  $url     target url
+	 * @param  int     $timeout timeout (sec)
+	 * @param  int     $redirect_max redirect max count
+	 * @param  string  $ua
+	 * @return string or bool(false)
+	 * @retval string contents
+	 * @retval false  error
+	 * @author Naoki Sawada
+	 **/
+	 protected function curl_get_contents( $url, $timeout, $redirect_max, $ua ){
+		$ch = curl_init();
+		curl_setopt( $ch, CURLOPT_URL, $url );
+		curl_setopt( $ch, CURLOPT_HEADER, false );
+		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+		curl_setopt( $ch, CURLOPT_BINARYTRANSFER, true );
+		curl_setopt( $ch, CURLOPT_TIMEOUT, $timeout );
+		curl_setopt( $ch, CURLOPT_SSL_VERIFYPEER, false );
+		curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, 1);
+		curl_setopt( $ch, CURLOPT_MAXREDIRS, $redirect_max);
+		curl_setopt( $ch, CURLOPT_USERAGENT, $ua);
+		$result = curl_exec( $ch );
+		curl_close( $ch );
+		return $result;
+	}
+	
+	/**
+	 * Get remote contents with fsockopen()
+	 *
+	 * @param  string  $url          url
+	 * @param  int     $timeout      timeout (sec)
+	 * @param  int     $redirect_max redirect max count
+	 * @param  string  $ua
+	 * @return string or bool(false)
+	 * @retval string contents
+	 * @retval false  error
+	 * @author Naoki Sawada
+	 */
+	protected function fsock_get_contents( $url, $timeout, $redirect_max, $ua ) {
+
+		$connect_timeout = 3;
+		$connect_try = 3;
+		$method = 'GET';
+		$readsize = 4096;
+
+		$getSize = null;
+		$headers = '';
+		
+		$arr = parse_url($url);
+		if (!$arr){
+			// Bad request
+			return false;
+		}
+		
+		// query
+		$arr['query'] = isset($arr['query']) ? '?'.$arr['query'] : '';
+		// port
+		$arr['port'] = isset($arr['port']) ? $arr['port'] : (!empty($arr['https'])? 443 : 80);
+		
+		$url_base = $arr['scheme'].'://'.$arr['host'].':'.$arr['port'];
+		$url_path = isset($arr['path']) ? $arr['path'] : '/';
+		$uri = $url_path.$arr['query'];
+		
+		$query = $method.' '.$uri." HTTP/1.0\r\n";
+		$query .= "Host: ".$arr['host']."\r\n";
+		if (!empty($ua)) $query .= "User-Agent: ".$ua."\r\n";
+		if (!is_null($getSize)) $query .= 'Range: bytes=0-' . ($getSize - 1) . "\r\n";
+		
+		$query .= $headers;
+
+		$query .= "\r\n";
+
+		$fp = $connect_try_count = 0;
+		while( !$fp && $connect_try_count < $connect_try ) {
+	
+			$errno = 0;
+			$errstr = "";
+			$fp = @ fsockopen(
+			$arr['https'].$arr['host'],
+			$arr['port'],
+			$errno,$errstr,$connect_timeout);
+			if ($fp) break;
+			$connect_try_count++;
+			if (connection_aborted()) {
+				exit();
+			}
+			sleep(1); // wait 1sec
+		}
+		
+		$fwrite = 0;
+		for ($written = 0; $written < strlen($query); $written += $fwrite) {
+			$fwrite = fwrite($fp, substr($query, $written));
+			if (!$fwrite) {
+				break;
+			}
+		}
+		
+		$response = '';
+		
+		if ($timeout) {
+			socket_set_timeout($fp, $timeout);
+		}
+		
+		$_response = true;
+		while ($_response && (is_null($getSize) || strlen($response) < $getSize)) {
+			if (connection_aborted()) {
+				exit();
+			}
+			if ($_response = fread($fp, $readsize)) {
+				$response .= $_response;
+			}
+		}
+		
+		if ($timeout) {
+			$_status = socket_get_status($fp);
+			if ($_status['timed_out']) {
+				fclose($fp);
+				return false; // Request Time-out
+			}
+		}
+		
+		fclose($fp);
+		
+		$resp = array_pad(explode("\r\n\r\n",$response,2), 2, '');
+		$rccd = array_pad(explode(' ',$resp[0],3), 3, ''); // array('HTTP/1.1','200','OK\r\n...')
+		$rc = (int)$rccd[1];
+		
+		// Redirect
+		switch ($rc) {
+			case 307: // Temporary Redirect
+			case 303: // See Other
+			case 302: // Moved Temporarily
+			case 301: // Moved Permanently
+				$matches = array();
+				if (preg_match('/^Location: (.+?)(#.+)?$/im',$resp[0],$matches) && --$redirect_max > 0) {
+					$url = trim($matches[1]);
+					$hash = isset($matches[2])? trim($matches[2]) : '';
+					if (!preg_match('/^https?:\//',$url)) { // no scheme
+						if ($url{0} != '/') { // Relative path
+							// to Absolute path
+							$url = substr($url_path,0,strrpos($url_path,'/')).'/'.$url;
+						}
+						// add sheme,host
+						$url = $url_base.$url;
+					}
+					return $this->fsock_get_contents( $url, $timeout, $redirect_max, $ua );
+				}
+		}
+
+		return $resp[1]; // Data
+	}
+	
+	/**
+	 * Parse Data URI scheme
+	 * 
+	 * @param  string $str
+	 * @param  array  $extTable
+	 * @return array
+	 * @author Naoki Sawada
+	 */
+	protected function parse_data_scheme( $str, $extTable ) {
+		$data = $name = '';
+		if ($fp = fopen('data://'.substr($str, 5), 'rb')) {
+			if ($data = stream_get_contents($fp)) {
+				$meta = stream_get_meta_data($fp);
+				$ext = isset($extTable[$meta['mediatype']])? '.' . $extTable[$meta['mediatype']] : '';
+				$name = substr(md5($data), 0, 8) . $ext;
+			}
+			fclose($fp);
+		}
+		return array($data, $name);
+	}
 	
 	/**
 	 * Save uploaded files
@@ -917,13 +1236,60 @@ class elFinder {
 		$files  = isset($args['FILES']['upload']) && is_array($args['FILES']['upload']) ? $args['FILES']['upload'] : array();
 		$header = empty($args['html']) ? array() : array('header' => 'Content-Type: text/html; charset=utf-8');
 		$result = array_merge(array('added' => array()), $header);
-		
-		if (empty($files)) {
-			return array_merge(array('error' => $this->error(self::ERROR_UPLOAD, self::ERROR_UPLOAD_NO_FILES)), $header);
-		}
+		$paths = $args['upload_path']? $args['upload_path'] : array();
 		
 		if (!$volume) {
 			return array_merge(array('error' => $this->error(self::ERROR_UPLOAD, self::ERROR_TRGDIR_NOT_FOUND, '#'.$target)), $header);
+		}
+		
+		// file extentions table by MIME
+		$extTable = array_flip($volume->getMimeTable());
+		
+		$non_uploads = array();
+		if (empty($files)) {
+			if (isset($args['upload']) && is_array($args['upload'])) {
+				foreach($args['upload'] as $i => $url) {
+					// check is data:
+					if (substr($url, 0, 5) === 'data:') {
+						list($data, $args['name'][$i]) = $this->parse_data_scheme($url, $extTable);
+					} else {
+						$data = $this->get_remote_contents($url);
+					}
+					if ($data) {
+						$_name = isset($args['name'][$i])? $args['name'][$i] : preg_replace('~^.*?([^/#?]+)(?:\?.*)?(?:#.*)?$~', '$1', rawurldecode($url));
+						if ($_name) {
+							$_ext = '';
+							if (preg_match('/(\.[a-z0-9]{1,7})$/', $_name, $_match)) {
+								$_ext = $_match[1];
+							}
+							$tmpfname = DIRECTORY_SEPARATOR . 'ELF_FATCH_' . md5($url.microtime()) . $_ext;
+							$tmpPath = sys_get_temp_dir();
+							if (! @ touch($tmpPath . $tmpfname)) {
+								if ($tmpPath = $volume->getTempPath()) {
+									$tmpfname = $tmpPath . $tmpfname;
+								} else {
+									$tmpfname = '';
+								}
+							} else {
+								$tmpfname = $tmpPath . $tmpfname;
+							}
+							if ($tmpfname) {
+								if (file_put_contents($tmpfname, $data)) {
+									$non_uploads[$tmpfname] = true;
+									$files['tmp_name'][$i] = $tmpfname;
+									$files['name'][$i] = preg_replace('/[\/\\?*:|"<>]/', '_', $_name);
+									$files['error'][$i] = 0;
+								} else {
+									@ unlink($tmpfname);
+								}
+							}
+						}
+					}
+				}
+			}
+			if (empty($files)) {
+				return array_merge(array('error' => $this->error(self::ERROR_UPLOAD, self::ERROR_UPLOAD_NO_FILES)), $header);
+			}
 		}
 		
 		foreach ($files['name'] as $i => $name) {
@@ -934,23 +1300,54 @@ class elFinder {
 			}
 			
 			$tmpname = $files['tmp_name'][$i];
+			$path = ($paths && !empty($paths[$i]))? $paths[$i] : '';
+			if ($name === 'blob') {
+				// for form clipboard with Google Chrome
+				$type = $files['type'][$i];
+				$ext = isset($extTable[$type])? '.' . $extTable[$type] : '';
+				$name = substr(md5(basename($tmpname)), 0, 8) . $ext;
+			}
+			
+			// do hook function 'upload.presave'
+			if (! empty($this->listeners['upload.presave'])) {
+				foreach($this->listeners['upload.presave'] as $handler) {
+					call_user_func_array($handler, array(&$path, &$name, $tmpname, $this, $volume));
+				}
+			}
 			
 			if (($fp = fopen($tmpname, 'rb')) == false) {
 				$result['warning'] = $this->error(self::ERROR_UPLOAD_FILE, $name, self::ERROR_UPLOAD_TRANSFER);
 				$this->uploadDebug = 'Upload error: unable open tmp file';
+				if (! is_uploaded_file($tmpname)) {
+					if (@ unlink($tmpname)) unset($non_uploads[$tmpfname]);
+					continue;
+				}
 				break;
 			}
-			
-			if (($file = $volume->upload($fp, $target, $name, $tmpname)) === false) {
+			if ($path) {
+				$_target = $volume->getUploadTaget($target, $path, $result);
+			} else {
+				$_target = $target;
+			}
+			if (! $_target || ($file = $volume->upload($fp, $_target, $name, $tmpname)) === false) {
 				$result['warning'] = $this->error(self::ERROR_UPLOAD_FILE, $name, $volume->error());
 				fclose($fp);
+				if (! is_uploaded_file($tmpname)) {
+					if (@ unlink($tmpname)) unset($non_uploads[$tmpfname]);;
+					continue;
+				}
 				break;
 			}
 			
 			fclose($fp);
+			if (! is_uploaded_file($tmpname) && @ unlink($tmpname)) unset($non_uploads[$tmpfname]);
 			$result['added'][] = $file;
 		}
-		
+		if ($non_uploads) {
+			foreach(array_keys($non_uploads) as $_temp) {
+				@ unlink($_temp);
+			}
+		}
 		return $result;
 	}
 		
@@ -1165,6 +1562,64 @@ class elFinder {
 			: array('error' => $this->error(self::ERROR_RESIZE, $volume->path($target), $volume->error()));
 	}
 	
+	/**
+	* Return content URL
+	*
+	* @param  array  $args  command arguments
+	* @return array
+	* @author Naoki Sawada
+	**/
+	protected function url($args) {
+		$target = $args['target'];
+		$options = isset($args['options'])? $args['options'] : array();
+		if (($volume = $this->volume($target)) != false) {
+			$url = $volume->getContentUrl($target, $options);
+			return $url ? array('url' => $url) : array();
+		}
+		return array();
+	}
+
+	/**
+	 * Edit on Pixlr.com
+	 *
+	 * @param  array  command arguments
+	 * @return array
+	 * @author Naoki Sawada
+	 **/
+	 protected function pixlr($args) {
+		
+	 	if (! empty($args['target'])) {
+		 	$args['upload'] = array( $args['image'] );
+			$args['name']   = array( preg_replace('/\.[a-z]{1,4}$/i', '', $args['title']).'.'.$args['type'] );
+		
+			$res = $this->upload($args);
+			$script = '
+				var elf=window.opener.document.getElementById(\''.htmlspecialchars($args['node'], ENT_QUOTES, 'UTF-8').'\').elfinder;
+				var data = '.json_encode($res).';
+				data.warning && elf.error(data.warning);
+				data.added && data.added.length && elf.add(data);
+				elf.trigger(\'upload\', data);
+				window.close();';
+	 	} else {
+	 		$script = 'window.close();';
+	 	}
+	 	$out = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><script>'.$script.'</script></head><body><a href="#" onlick="window.close();return false;">Close this window</a></body></html>';
+	 	
+	 	while( ob_get_level() ) {
+			if (! ob_end_clean()) {
+				break;
+			}
+		}
+	 	
+	 	header('Content-Type: text/html; charset=utf-8');
+	 	header('Content-Length: '.strlen($out));
+	 	header('Cache-Control: private');
+	 	header('Pragma: no-cache');
+	 	echo $out;
+	 	
+		exit();
+	}
+
 	/***************************************************************************/
 	/*                                   utils                                 */
 	/***************************************************************************/

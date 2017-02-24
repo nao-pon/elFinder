@@ -172,7 +172,7 @@ $.fn.elfinderplaces = function(fm, opts) {
 				.hide()
 				.append(wrapper)
 				.appendTo(fm.getUI('navbar'))
-				.delegate('.'+navdir, 'hover', function() {
+				.delegate('.'+navdir, 'mouseenter mouseleave', function() {
 					$(this).toggleClass('ui-state-hover');
 				})
 				.delegate('.'+navdir, 'click', function(e) {

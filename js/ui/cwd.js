@@ -133,6 +133,8 @@ $.fn.elfindercwd = function(fm, options) {
 			
 			permsTpl = fm.res('tpl', 'perms'),
 			
+			lockTpl = fm.res('tpl', 'lock'),
+			
 			symlinkTpl = fm.res('tpl', 'symlink'),
 			
 			/**
@@ -163,7 +165,7 @@ $.fn.elfindercwd = function(fm, options) {
 					return fm.mime2kind(f);
 				},
 				marker : function(f) {
-					return (f.alias || f.mime == 'symlink-broken' ? symlinkTpl : '')+(!f.read || !f.write ? permsTpl : '');
+					return (f.alias || f.mime == 'symlink-broken' ? symlinkTpl : '')+(!f.read || !f.write ? permsTpl : '')+(f.locked ? lockTpl : '');
 				},
 				tooltip : function(f) {
 					var title = fm.formatDate(f) + (f.size > 0 ? ' ('+fm.formatSize(f.size)+')' : '');
@@ -961,8 +963,28 @@ $.fn.elfindercwd = function(fm, options) {
 			wrapper[0].addEventListener('drop', function(e) {
 			  	e.preventDefault();
 				wrapper.removeClass(clDropActive);
-
-				e.dataTransfer && e.dataTransfer.files &&  e.dataTransfer.files.length && fm.exec('upload', {files : e.dataTransfer.files})//fm.upload({files : e.dataTransfer.files});
+				var file = false;
+				var type = '';
+				var data = null;
+				try{
+					data = e.dataTransfer.getData('text/html');
+				} catch(e) {}
+				if (data) {
+					file = [ data ];
+					type = 'html';
+				} else if (data = e.dataTransfer.getData('text')) {
+					file = [ data ];
+					type = 'text';
+				} else if (e.dataTransfer && e.dataTransfer.items &&  e.dataTransfer.items.length) {
+					file = e.dataTransfer;
+					type = 'data';
+				} else if (e.dataTransfer && e.dataTransfer.files &&  e.dataTransfer.files.length) {
+					file = e.dataTransfer.files;
+					type = 'files';
+				}
+				if (file) {
+					fm.exec('upload', {files : file, type : type});
+				}
 			}, false);
 		}
 

@@ -160,6 +160,13 @@ $.fn.elfindertree = function(fm, opts) {
 			ptpl = fm.res('tpl', 'perms'),
 			
 			/**
+			 * Lock marker html template
+			 *
+			 * @type String
+			 */
+			ltpl = fm.res('tpl', 'lock'),
+			
+			/**
 			 * Symlink marker html template
 			 *
 			 * @type String
@@ -175,7 +182,8 @@ $.fn.elfindertree = function(fm, opts) {
 				id          : function(dir) { return fm.navHash2Id(dir.hash) },
 				cssclass    : function(dir) { return (dir.phash ? '' : root)+' '+navdir+' '+fm.perms2class(dir)+' '+(dir.dirs && !dir.link ? collapsed : ''); },
 				permissions : function(dir) { return !dir.read || !dir.write ? ptpl : ''; },
-				symlink     : function(dir) { return dir.alias ? stpl : ''; }
+				symlink     : function(dir) { return dir.alias ? stpl : ''; },
+				style       : function(dir) { return dir.icon ? 'style="background-image:url(\''+dir.icon+'\')"' : ''; }
 			},
 			
 			/**
@@ -368,7 +376,7 @@ $.fn.elfindertree = function(fm, opts) {
 			 */
 			tree = $(this).addClass(treeclass)
 				// make dirs draggable and toggle hover class
-				.delegate('.'+navdir, 'hover', function(e) {
+				.delegate('.'+navdir, 'mouseenter mouseleave', function(e) {
 					var link  = $(this), 
 						enter = e.type == 'mouseenter';
 					
