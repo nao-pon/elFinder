@@ -167,12 +167,14 @@ You can create or modify the language file to use translation tool. Please refer
 3rd party connectors
 --------------------
  * [ASP.NET](https://github.com/leniel/elFinder.Net)
+ * [ASP.NET Core](https://github.com/gordon-matt/elFinder.NetCore)
  * [Java Servlet](https://github.com/trustsystems/elfinder-java-connector)
  * [Python](https://github.com/Studio-42/elfinder-python)
  * [Ruby/Rails](https://github.com/phallstrom/el_finder)
  * [Django](https://github.com/mikery/django-elfinder)
  * [Laravel](https://github.com/barryvdh/laravel-elfinder)
  * [JavaScript/Efw](https://github.com/efwGrp/efw3.X/blob/master/help/api_efw_tag.md#elfinder-tag)
+ * [Symfony](https://github.com/helios-ag/FMElfinderBundle) 
 
 3rd party Volume Drivers
 --------------------
