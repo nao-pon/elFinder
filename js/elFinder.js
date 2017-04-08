@@ -728,6 +728,15 @@ var elFinder = function(node, opts) {
 	 * @default "{day} {time}"
 	 **/
 	this.fancyFormat = this.options.fancyDateFormat || i18n.fancyDateFormat;
+	
+	/**
+	 * Date format for if upload file has not original unique name
+	 * e.g. Clipboard image data, Image data taken with iOS
+	 *
+	 * @type String
+	 * @default "ymd-His"
+	 **/
+	this.nonameDateFormat = (this.options.nonameDateFormat || i18n.nonameDateFormat).replace(/[\/\\]/g, '_');
 
 	/**
 	 * Today timestamp
@@ -3790,6 +3799,9 @@ var elFinder = function(node, opts) {
 		this.trigger('cssloaded');
 	}
 	
+	// calculate elFinder node z-index
+	this.zIndexCalc();
+
 	// send initial request and start to pray >_<
 	this.trigger('init')
 		.request({
@@ -3806,19 +3818,8 @@ var elFinder = function(node, opts) {
 			self.trigger = function() { };
 		})
 		.done(function(data) {
-			// detect elFinder node z-index
-			var ni = node.css('z-index');
-			if (ni && ni !== 'auto' && ni !== 'inherit') {
-				self.zIndex = ni;
-			} else {
-				node.parents().each(function(i, n) {
-					var z = $(n).css('z-index');
-					if (z !== 'auto' && z !== 'inherit' && (z = parseInt(z))) {
-						self.zIndex = z;
-						return false;
-					}
-				});
-			}
+			// re-calculate elFinder node z-index
+			self.zIndexCalc();
 			
 			self.load().debug('api', self.api);
 			// update ui's size after init
@@ -3908,6 +3909,7 @@ elFinder.prototype = {
 			direction       : 'ltr',
 			dateFormat      : 'd.m.Y H:i',
 			fancyDateFormat : '$1 H:i',
+			nonameDateFormat : 'ymd-His',
 			messages        : {}
 		},
 		months : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
@@ -5047,11 +5049,11 @@ elFinder.prototype = {
 							formData.append('upload[]', file);
 							if (data.clipdata) {
 								data.overwrite = 0;
-								formData.append('name[]', 'clip-' + fm.date('ymd') + '.png');
+								formData.append('name[]', fm.date(fm.nonameDateFormat) + '.png');
 							}
 							if (fm.UA.iOS && file.name === 'image.jpg') {
 								data.overwrite = 0;
-								formData.append('name[]', 'pic-' + fm.date('ymd') + '.jpg');
+								formData.append('name[]', fm.date(fm.nonameDateFormat) + '.jpg');
 							}
 						}
 						if (file._chunk) {
@@ -6948,6 +6950,28 @@ elFinder.prototype = {
 		}
 		rect = elm.getBoundingClientRect();
 		return document.elementFromPoint(rect.left, rect.top)? true : false;
+	},
+	
+	/**
+	 * calculate elFinder node z-index
+	 * 
+	 * @return void
+	 */
+	zIndexCalc : function() {
+		var self = this,
+			node = this.getUI(),
+			ni = node.css('z-index');
+		if (ni && ni !== 'auto' && ni !== 'inherit') {
+			self.zIndex = ni;
+		} else {
+			node.parents().each(function(i, n) {
+				var z = $(n).css('z-index');
+				if (z !== 'auto' && z !== 'inherit' && (z = parseInt(z))) {
+					self.zIndex = z;
+					return false;
+				}
+			});
+		}
 	},
 	
 	/**

@@ -143,7 +143,7 @@ class elFinder {
 		'rename'    => array('target' => true, 'name' => true, 'mimes' => false),
 		'duplicate' => array('targets' => true, 'suffix' => false),
 		'paste'     => array('dst' => true, 'targets' => true, 'cut' => false, 'mimes' => false, 'renames' => false, 'hashes' => false, 'suffix' => false),
-		'upload'    => array('target' => true, 'FILES' => true, 'mimes' => false, 'html' => false, 'upload' => false, 'name' => false, 'upload_path' => false, 'chunk' => false, 'cid' => false, 'node' => false, 'renames' => false, 'hashes' => false, 'suffix' => false, 'mtime' => false),
+		'upload'    => array('target' => true, 'FILES' => true, 'mimes' => false, 'html' => false, 'upload' => false, 'name' => false, 'upload_path' => false, 'chunk' => false, 'cid' => false, 'node' => false, 'renames' => false, 'hashes' => false, 'suffix' => false, 'mtime' => false, 'overwrite' => false),
 		'get'       => array('target' => true, 'conv' => false),
 		'put'       => array('target' => true, 'content' => '', 'mimes' => false, 'encoding' => false),
 		'archive'   => array('targets' => true, 'type' => true, 'mimes' => false, 'name' => false),
@@ -2210,9 +2210,17 @@ class elFinder {
 		$cid    = $args['cid']? (int)$args['cid'] : '';
 		$mtimes = $args['mtime']? $args['mtime'] : array();
 		
+		if (!$volume) {
+			return array_merge(array('error' => $this->error(self::ERROR_UPLOAD, self::ERROR_TRGDIR_NOT_FOUND, '#'.$target)), $header);
+		}
+		
 		// check $chunk
 		if (strpos($chunk, '/') !== false || strpos($chunk, '\\') !== false) {
 			return array('error' => $this->error(self::ERROR_UPLOAD));
+		}
+		
+		if ($args['overwrite'] !== '') {
+			$volume->setUploadOverwrite($args['overwrite']);
 		}
 		
 		$renames = $hashes = array();
@@ -2225,10 +2233,6 @@ class elFinder {
 		}
 		if ($args['hashes'] && is_array($args['hashes'])) {
 			$hashes = array_flip($args['hashes']);
-		}
-		
-		if (!$volume) {
-			return array_merge(array('error' => $this->error(self::ERROR_UPLOAD, self::ERROR_TRGDIR_NOT_FOUND, '#'.$target)), $header);
 		}
 		
 		$this->itemLock($target);
@@ -2284,7 +2288,6 @@ class elFinder {
 					} else {
 						$fp = fopen($tmpfname, 'wb');
 						$data = $this->get_remote_contents($url, 30, 5, 'Mozilla/5.0', $fp);
-						$_POST['overwrite'] = false;
 						$_name = preg_replace('~^.*?([^/#?]+)(?:\?.*)?(?:#.*)?$~', '$1', rawurldecode($url));
 						// Check `Content-Disposition` response header
 						if ($data && ($headers = get_headers($url, true)) && !empty($headers['Content-Disposition'])) {
@@ -2327,8 +2330,10 @@ class elFinder {
 								$files['tmp_name'][$i] = $tmpfname;
 								$files['name'][$i] = $_name;
 								$files['error'][$i] = 0;
+								// set to auto rename
+								$volume->setUploadOverwrite(false);
 							} else {
-								 unlink($tmpfname);
+								unlink($tmpfname);
 							}
 						}
 					}
@@ -2378,7 +2383,7 @@ class elFinder {
 			}
 			
 			// Set name if name eq 'image.png' and $args has 'name' array, e.g. clipboard data
-			if (strtolower($name) === 'image.png' && is_array($args['name']) && isset($args['name'][$i])) {
+			if (strtolower(substr($name, 0, 5)) === 'image' && is_array($args['name']) && isset($args['name'][$i])) {
 				$type = $files['type'][$i];
 				$name = $args['name'][$i];
 				$ext = isset($extTable[$type])? '.' . $extTable[$type] : '';
