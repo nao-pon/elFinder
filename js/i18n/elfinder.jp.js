@@ -148,6 +148,8 @@
 			'cmdcolwidth'  : '列幅リセット', // from v2.1.13 added 12.06.2016
 			'cmdfullscreen': 'フルスクリーン', // from v2.1.15 added 03.08.2016
 			'cmdmove'      : '移動', // from v2.1.15 added 21.08.2016
+			
+			'cmdpixlr'     : 'Pixlr で編集',
 
 			/*********************************** buttons ***********************************/
 			'btnClose'  : '閉じる',

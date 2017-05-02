@@ -140,6 +140,8 @@ if (typeof elFinder === 'function' && elFinder.prototype.i18) {
 			'cmdcolwidth'  : 'Reset column width', // from v2.1.13 added 12.06.2016
 			'cmdfullscreen': 'Full Screen', // from v2.1.15 added 03.08.2016
 			'cmdmove'      : 'Move', // from v2.1.15 added 21.08.2016
+			
+			'cmdpixlr'     : 'Edit on Pixlr',
 
 			/*********************************** buttons ***********************************/
 			'btnClose'  : 'Close',
