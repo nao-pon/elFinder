@@ -740,7 +740,7 @@ class elFinder {
 		} else if (isset($args['targets']) && is_array($args['targets']) && isset($args['targets'][0])) {
 			$dst = $args['targets'][0];
 			$dstVolume = $this->volume($dst);
-			if (($_stat = $dstVolume->file($dst)) && ! empty($_stat['phash'])) {
+			if ($dstVolume && ($_stat = $dstVolume->file($dst)) && ! empty($_stat['phash'])) {
 				$dst = $_stat['phash'];
 			} else {
 				$dst = '';
@@ -2494,7 +2494,7 @@ class elFinder {
 		$targets = is_array($args['targets']) ? $args['targets'] : array();
 		$cut     = !empty($args['cut']);
 		$error   = $cut ? self::ERROR_MOVE : self::ERROR_COPY;
-		$result  = array('changed' => array(), 'added' => array(), 'removed' => array());
+		$result  = array('changed' => array(), 'added' => array(), 'removed' => array(), 'warning' => array());
 		
 		if (($dstVolume = $this->volume($dst)) == false) {
 			return array('error' => $this->error($error, '#'.$targets[0], self::ERROR_TRGDIR_NOT_FOUND, '#'.$dst));
@@ -2518,8 +2518,8 @@ class elFinder {
 			elFinder::extendTimeLimit();
 			
 			if (($srcVolume = $this->volume($target)) == false) {
-				$result['warning'] = $this->error($error, '#'.$target, self::ERROR_FILE_NOT_FOUND);
-				break;
+				$result['warning'] = array_merge($result['warning'], $this->error($error, '#'.$target, self::ERROR_FILE_NOT_FOUND));
+				continue;
 			}
 			
 			$rnres = array();
@@ -2534,21 +2534,21 @@ class elFinder {
 					}
 					$rnres = $this->rename(array('target' => $hash, 'name' => $dstVolume->uniqueName($dir, $file['name'], $suffix, true, 0)));
 					if (!empty($rnres['error'])) {
-						$result['warning'] = $rnres['error'];
-						break;
+						$result['warning'] = array_merge($result['warning'], $rnres['error']);
+						continue;
 					}
 				}
 			}
 			
 			if ($cut && $this->itemLocked($target)) {
 				$rm = $srcVolume->file($target);
-				$result['warning'] = $this->error(self::ERROR_LOCKED, $rm['name']);
-				break;
+				$result['warning'] = array_merge($result['warning'], $this->error(self::ERROR_LOCKED, $rm['name']));
+				continue;
 			}
 			
 			if (($file = $dstVolume->paste($srcVolume, $target, $dst, $cut, $hashes)) == false) {
-				$result['warning'] = $this->error($dstVolume->error());
-				break;
+				$result['warning'] = array_merge($result['warning'], $this->error($dstVolume->error()));
+				continue;
 			}
 
 			$dirChange = ! empty($file['dirChange']);
@@ -2562,6 +2562,10 @@ class elFinder {
 				$result = array_merge_recursive($result, $rnres);
 			}
 		}
+		if (count($result['warning']) < 1) {
+			unset($result['warning']);
+		}
+		
 		return $result;
 	}
 	
