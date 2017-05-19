@@ -105,7 +105,7 @@ elFinder.prototype.commands.rm = function() {
 			if (cnt) {
 				fm.request({
 					data   : {cmd  : 'mkdir', target : tHash, dirs : dirs}, 
-					notify : {type : 'mkdir', cnt : cnt},
+					notify : {type : 'chkdir', cnt : cnt},
 					preventFail : true
 				})
 				.fail(function(error) {
@@ -195,7 +195,8 @@ elFinder.prototype.commands.rm = function() {
 													fm.error(err);
 												}
 											}
-											dfrd.done(res);
+											res._noSound = true;
+											dfrd.resolve(res);
 										} else {
 											dfrd.reject(err);
 										}
@@ -213,10 +214,11 @@ elFinder.prototype.commands.rm = function() {
 				fm.unlockfiles({files : targets});
 			}
 		},
-		remove = function(dfrd, targets) {
+		remove = function(dfrd, targets, quiet) {
+			var notify = quiet? {} : {type : 'rm', cnt : targets.length};
 			fm.request({
 				data   : {cmd  : 'rm', targets : targets}, 
-				notify : {type : 'rm', cnt : targets.length},
+				notify : notify,
 				preventFail : true
 			})
 			.fail(function(error) {
@@ -226,7 +228,7 @@ elFinder.prototype.commands.rm = function() {
 				if (data.error || data.warning) {
 					data.sync = true;
 				}
-				dfrd.done(data);
+				dfrd.resolve(data);
 			})
 			.always(function() {
 				fm.unlockfiles({files : targets});
@@ -249,36 +251,69 @@ elFinder.prototype.commands.rm = function() {
 			return thash;
 		};
 	
+	fm.bind('contextmenu', function(e) {
+		self.update(void(0), getTHash(e.data.targets)? 'trash' : 'rm');
+	});
+	
 	this.syncTitleOnChange = true;
-	this.updateOnSelect  = false;
+	this.updateOnSelect = true;
 	this.shortcuts = [{
 		pattern     : 'delete ctrl+backspace shift+delete'
 	}];
 	this.handlers = {
 		'open' : function() {
-			self.title = self.fm.i18n(self.fm.option('trashHash')? 'cmdtrash' : 'cmdrm');
-			self.change();
+			self.update(void(0), fm.i18n(self.fm.option('trashHash')? 'trash' : 'rm'));
 		}
 	}
 	
-	this.getstate = function(sel, e) {
-		if (sel && sel.length) {
-			self.title = fm.i18n(getTHash(sel)? 'cmdtrash' : 'cmdrm');
-		}
+	this.init = function() {
+		self.change(function() {
+			delete self.extra;
+			self.title = fm.i18n('cmd' + self.value);
+			self.className = self.value;
+			self.button.children('span.elfinder-button-icon')[self.value === 'trash'? 'addClass' : 'removeClass']('elfinder-button-icon-trash');
+			if (self.value === 'trash') {
+				self.extra = {
+					icon: 'rm',
+					node: $('<span/>')
+						.attr({title: fm.i18n('cmdrm')})
+						.on('click touchstart', function(e){
+							if (e.type === 'touchstart' && e.originalEvent.touches.length > 1) {
+								return;
+							}
+							e.stopPropagation();
+							e.preventDefault();
+							self.exec(void(0), {forceRm : true});
+						})
+				};
+			}
+		});
+	}
+	
+	this.getstate = function(sel) {
+		var name;
 		sel = sel || fm.selected();
+		if (sel && sel.length) {
+			self.value = getTHash(sel)? 'trash' : 'rm';
+		}
 		return sel.length && $.map(sel, function(h) { var f = fm.file(h); return f && ! f.locked && ! fm.isRoot(f)? h : null }).length == sel.length
 			? 0 : -1;
 	}
 	
 	this.exec = function(hashes, opts) {
-		var dfrd   = $.Deferred()
+		var opts   = opts || {},
+			dfrd   = $.Deferred()
 				.fail(function(error) {
 					error && fm.error(error);
+				}).done(function(data) {
+					!opts.quiet && !data._noSound && data.removed && data.removed.length && fm.trigger('playsound', {soundFile : 'rm.wav'});
 				}),
 			files  = self.files(hashes),
 			cnt    = files.length,
 			tHash  = null,
-			addTexts = opts && opts.addTexts? opts.addTexts : null,
+			addTexts = opts.addTexts? opts.addTexts : null,
+			forceRm = opts.forceRm,
+			quiet = opts.quiet,
 			targets;
 
 		if (! cnt) {
@@ -298,7 +333,7 @@ elFinder.prototype.commands.rm = function() {
 			targets = self.hashes(hashes);
 			cnt     = files.length
 			
-			if (addTexts || (self.event && self.event.originalEvent && self.event.originalEvent.shiftKey)) {
+			if (addTexts || forceRm || (self.event && self.event.originalEvent && self.event.originalEvent.shiftKey)) {
 				tHash = '';
 				self.title = fm.i18n('cmdrm');
 			}
@@ -312,7 +347,11 @@ elFinder.prototype.commands.rm = function() {
 			if (tHash && self.options.quickTrash) {
 				toTrash(dfrd, targets, tHash);
 			} else {
-				confirm(dfrd, targets, files, tHash, addTexts);
+				if (quiet) {
+					remove(dfrd, targets, quiet);
+				} else {
+					confirm(dfrd, targets, files, tHash, addTexts);
+				}
 			}
 		}
 			

@@ -2,7 +2,7 @@
  * Japanese translation
  * @author Tomoaki Yoshida <info@yoshida-studio.jp>
  * @author Naoki Sawada <hypweb@gmail.com>
- * @version 2017-05-02
+ * @version 2017-05-11
  */
 (function(root, factory) {
 	if (typeof define === 'function' && define.amd) {
@@ -111,6 +111,7 @@
 			'errSearchTimeout'     : '"$1" を検索中にタイムアウトしました。検索結果は部分的です。', // from v2.1 added 12.1.2016
 			'errReauthRequire'     : '再認可が必要です。', // from v2.1.10 added 24.3.2016
 			'errMaxTargets'        : '選択可能な最大アイテム数は $1 個です。', // from v2.1.17 added 17.10.2016
+			'errRestore'           : '宛先の特定ができないため、ごみ箱から戻せません。', // from v2.1.24 added 3.5.2017
 
 			/******************************* commands names ********************************/
 			'cmdarchive'   : 'アーカイブ作成',
@@ -136,6 +137,7 @@
 			'cmdrename'    : 'リネーム',
 			'cmdrm'        : '削除',
 			'cmdtrash'     : 'ごみ箱へ', //from v2.1.24 added 29.4.2017
+			'cmdrestore'   : '元に戻す', //from v2.1.24 added 3.5.2017
 			'cmdsearch'    : 'ファイルを探す',
 			'cmdup'        : '親ディレクトリーへ移動',
 			'cmdupload'    : 'ファイルアップロード',
@@ -174,17 +176,19 @@
 			'btnBackup' : 'バックアップ', // fromv2.1 added 28.11.2015
 			'btnRename'    : 'リネーム',      // from v2.1.24 added 6.4.2017
 			'btnRenameAll' : 'リネーム(全て)', // from v2.1.24 added 6.4.2017
+			'btnPrevious' : '前へ ($1/$2)', // from v2.1.24 added 11.5.2017
+			'btnNext'     : '次へ ($1/$2)', // from v2.1.24 added 11.5.2017
 
 			/******************************** notifications ********************************/
 			'ntfopen'     : 'フォルダーを開いています',
 			'ntffile'     : 'ファイルを開いています',
 			'ntfreload'   : 'フォルダーを再読込しています',
-			'ntfmkdir'    : 'ディレクトリーを作成しています',
+			'ntfmkdir'    : 'フォルダーを作成しています',
 			'ntfmkfile'   : 'ファイルを作成しています',
 			'ntfrm'       : 'ファイルを削除しています',
 			'ntfcopy'     : 'ファイルをコピーしています',
 			'ntfmove'     : 'ファイルを移動しています',
-			'ntfprepare'  : 'ファイルコピーを準備しています',
+			'ntfprepare'  : '既存アイテムを確認しています',
 			'ntfrename'   : 'ファイル名を変更しています',
 			'ntfupload'   : 'ファイルをアップロードしています',
 			'ntfdownload' : 'ファイルをダウンロードしています',
@@ -206,6 +210,8 @@
 			'ntfparents'  : 'パス情報を取得しています', // from v2.1.17 added 2.11.2016
 			'ntfchunkmerge': 'アップロード済みファイルを処理中', // from v2.1.17 added 2.11.2016
 			'ntftrash'    : 'ごみ箱に入れています', // from v2.1.24 added 2.5.2017
+			'ntfrestore'  : 'ごみ箱から元に戻しています', // from v2.1.24 added 2.5.2017
+			'ntfchkdir'   : '宛先ホルダーを確認しています', // from v2.1.24 added 3.5.2017
 
 			/*********************************** volumes *********************************/
 			'volume_Trash' : 'ごみ箱', //from v2.1.24 added 29.4.2017
@@ -273,7 +279,8 @@
 			/********************************** messages **********************************/
 			'confirmReq'      : '処理を実行しますか？',
 			'confirmRm'       : 'アイテムを完全に削除してもよろしいですか？<br/>この操作は取り消せません！',
-			'confirmRepl'     : '古いファイルを新しいファイルで上書きしますか？',
+			'confirmRepl'     : '古いアイテムを新しいアイテムで上書きしますか？',
+			'confirmRest'     : '既存のアイテムをごみ箱のアイテムで上書きしますか？', // fromv2.1.24 added 5.5.2017
 			'confirmConvUTF8' : 'UTF-8 以外の文字が含まれています。<br/>UTF-8  に変換しますか？<br/>変換後の保存でコンテンツは UTF-8 になります。', // from v2.1 added 08.04.2014
 			'confirmNonUTF8'  : 'このファイルの文字エンコーディングを判別できませんでした。編集するには一時的に UTF-8 に変換する必要があります。<br/>文字エンコーディングを指定してください。', // from v2.1.19 added 28.11.2016
 			'confirmNotSave'  : '変更されています。<br/>保存せずに閉じると編集内容が失われます。', // from v2.1 added 15.7.2015
@@ -332,8 +339,9 @@
 			'dropFiles'       : 'ここにファイルをドロップ',
 			'or'              : 'または',
 			'selectForUpload' : 'ファイルを選択',
-			'moveFiles'       : 'ファイルを移動',
-			'copyFiles'       : 'ファイルをコピー',
+			'moveFiles'       : 'アイテムを移動',
+			'copyFiles'       : 'アイテムをコピー',
+			'restoreFiles'    : 'アイテムを元に戻す', // from v2.1.24 added 5.5.2017
 			'rmFromPlaces'    : 'ここから削除',
 			'aspectRatio'     : '縦横比維持',
 			'scale'           : '表示縮尺',
