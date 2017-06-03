@@ -33,12 +33,28 @@
 		// Documentation for client options:
 		// https://github.com/Studio-42/elFinder/wiki/Client-configuration-options
 		opts = {
-			url : 'php/connector.minimal.php', // connector URL (REQUIRED)
-			lang: lang                         // auto detected language (optional)
+			url : 'php/connector.minimal.php' // connector URL (REQUIRED)
+			,lang: lang                       // auto detected language (optional)
+			,commandsOptions : {
+				edit : {
+					extraOptions : {
+						// set API key to enable Creative Cloud image editor
+						// see https://console.adobe.io/
+						creativeCloudApiKey : '',
+						// browsing manager URL for CKEditor, TinyMCE
+						// uses self location with the empty value
+						managerUrl : ''
+					}
+				}
+				,quicklook : {
+					// to enable preview with Google Docs Viewer
+					googleDocsMimes : ['application/pdf', 'image/tiff', 'application/vnd.ms-office', 'application/msword', 'application/vnd.ms-word', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+				}
+			}
 		},
 		
 		// Start elFinder (REQUIRED)
-		start = function(elFinder) {
+		start = function(elFinder, editors) {
 			// load jQueryUI CSS
 			elFinder.prototype.loadCss('//cdnjs.cloudflare.com/ajax/libs/jqueryui/'+uiver+'/themes/smoothness/jquery-ui.css');
 			
@@ -49,6 +65,10 @@
 						return Encoding.convert(s,{to:'UNICODE',type:'string'});
 					};
 				}
+				
+				// editors marges to opts.commandOptions.edit
+				opts.commandsOptions.edit.editors = (opts.commandsOptions.edit.editors || []).concat(editors);
+				
 				// Make elFinder (REQUIRED)
 				$('#elfinder').elfinder(opts);
 			});
@@ -59,6 +79,7 @@
 			require(
 				[
 					'elfinder'
+					, 'extras/editors.default'                   // load text, image editors
 					, (lang !== 'en')? 'elfinder.lang' : null    // load detected language
 				//	, 'extras/quicklook.googledocs'              // optional preview for GoogleApps contents on the GoogleDrive volume
 				//	, (lang === 'jp')? 'extras/encoding-japanese.min' : null // optional Japanese decoder for archive preview

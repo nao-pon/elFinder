@@ -59,8 +59,10 @@ elFinder.prototype.resources = {
 	
 	mixin : {
 		make : function() {
-			var fm   = this.fm,
+			var self = this,
+				fm   = this.fm,
 				cmd  = this.name,
+				req  = this.requestCmd || cmd,
 				wz   = fm.getUI('workzone'),
 				org  = (this.origin && this.origin === 'navbar')? 'tree' : 'cwd',
 				ui   = fm.getUI(org),
@@ -78,7 +80,7 @@ elFinder.prototype.resources = {
 					}
 					node.removeClass('ui-front').css('position', '');
 					if (tarea) {
-						nnode.css('max-height', '');
+						nnode && nnode.css('max-height', '');
 					} else if (pnode) {
 						pnode.css('width', '')
 							.parent('td').css('overflow', '');
@@ -102,7 +104,7 @@ elFinder.prototype.resources = {
 						fm.trigger('resMixinMake');
 					}),
 				id    = 'tmp_'+parseInt(Math.random()*100000),
-				phash = tree? fm.file(sel[0]).hash : fm.cwd().hash,
+				phash = this.data && this.data.target? this.data.target : (tree? fm.file(sel[0]).hash : fm.cwd().hash),
 				date = new Date(),
 				file   = {
 					hash  : id,
@@ -150,7 +152,7 @@ elFinder.prototype.resources = {
 							}
 						}
 					})
-					.keydown(function(e) {
+					.on('keydown', function(e) {
 						e.stopImmediatePropagation();
 						if (e.keyCode == $.ui.keyCode.ESCAPE) {
 							dfrd.reject();
@@ -158,10 +160,13 @@ elFinder.prototype.resources = {
 							input.blur();
 						}
 					})
-					.mousedown(function(e) {
+					.on('mousedown click dblclick', function(e) {
 						e.stopPropagation();
+						if (e.type === 'dblclick') {
+							e.preventDefault();
+						}
 					})
-					.blur(function() {
+					.on('blur', function() {
 						var name   = $.trim(input.val()),
 							parent = input.parent(),
 							valid  = true,
@@ -197,7 +202,7 @@ elFinder.prototype.resources = {
 								fm.lockfiles({files : [id]});
 
 								fm.request({
-										data        : Object.assign({cmd : cmd, name : name, target : phash}, data || {}), 
+										data        : Object.assign({cmd : req, name : name, target : phash}, data || {}), 
 										notify      : {type : cmd, cnt : 1},
 										preventFail : true,
 										syncOnFail  : true
@@ -215,11 +220,11 @@ elFinder.prototype.resources = {
 												dirhash = item.hash,
 												newItem = ui.find('#'+fm[find](dirhash));
 											if (sel && move) {
-												fm.one(cmd+'done', function() {
+												fm.one(req+'done', function() {
 													fm.exec('paste', dirhash);
 												});
 											}
-											fm.one(cmd+'done', function() {
+											fm.one(req+'done', function() {
 												var acts = {
 														'directory' : { cmd: 'open', msg: 'cmdopendir' },
 														'text/plain': { cmd: 'edit', msg: 'cmdedit' },
@@ -228,7 +233,7 @@ elFinder.prototype.resources = {
 													act, extNode;
 												newItem = ui.find('#'+fm[find](item.hash));
 												if (data.added.length === 1) {
-													act = acts[item.mime] || acts['default'];
+													act = self.nextAction || acts[item.mime] || acts['default'];
 													extNode = $('<div/>').append(
 														$('<button type="button" class="ui-button ui-widget ui-state-default ui-corner-all elfinder-tabstop"><span class="ui-button-text">'
 															+fm.i18n(act.msg)
@@ -237,7 +242,7 @@ elFinder.prototype.resources = {
 															$(this).toggleClass('ui-state-hover', e.type == 'mouseenter');
 														})
 														.on('click', function() {
-															fm.exec(act.cmd, item.hash);
+															fm.exec(act.cmd, [item.hash], { _currentType: 'toast', _currentNode: $(this) });
 														})
 													);
 												}
@@ -259,11 +264,11 @@ elFinder.prototype.resources = {
 					}),
 				select = function() {
 					var name = input.val().replace(/\.((tar\.(gz|bz|bz2|z|lzo))|cpio\.gz|ps\.gz|xcf\.(gz|bz2)|[a-z0-9]{1,4})$/ig, '');
-					inError = false;
-					if (fm.UA.Mobile) {
+					if (!inError && fm.UA.Mobile) {
 						overlay.on('click', cancel)
 							.removeClass('ui-front').elfinderoverlay('show');
 					}
+					inError = false;
 					input.select().focus();
 					input[0].setSelectionRange && input[0].setSelectionRange(0, name.length);
 				},
@@ -274,7 +279,7 @@ elFinder.prototype.resources = {
 				// for tree
 				dst, dstCls, collapsed, expanded, arrow, subtree;
 
-			if ((! tree && this.disabled()) || !node.length) {
+			if (!fm.isCommandEnabled(req, phash) || !node.length) {
 				return dfrd.reject();
 			}
 

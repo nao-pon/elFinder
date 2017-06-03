@@ -312,6 +312,8 @@ abstract class elFinderVolumeDriver {
 		'uploadMaxSize'   => 0,
 		// maximum number of chunked upload connection. `-1` to disable chunked upload
 		'uploadMaxConn'   => 3,
+		// maximum get file size. NOTE - Maximum value is 50% of PHP memory_limit
+		'getMaxSize'      => 0,
 		// files dates format
 		'dateFormat'      => 'j M Y H:i',
 		// files time format
@@ -445,6 +447,14 @@ abstract class elFinderVolumeDriver {
 	 * @var string
 	 */
 	protected $uploadOverwrite = true;
+	
+	/**
+	 * Maximum allowed get file size.
+	 * Set as number or string with unit - "10M", "500K", "1G"
+	 *
+	 * @var int|string
+	 **/
+	protected $getMaxSize = -1;
 	
 	/**
 	 * Mimetype detect method
@@ -1110,20 +1120,7 @@ abstract class elFinderVolumeDriver {
 		}
 			
 		if (!empty($this->options['uploadMaxSize'])) {
-			$size = ''.$this->options['uploadMaxSize'];
-			$unit = strtolower(substr($size, strlen($size) - 1));
-			$n = 1;
-			switch ($unit) {
-				case 'k':
-					$n = 1024;
-					break;
-				case 'm':
-					$n = 1048576;
-					break;
-				case 'g':
-					$n = 1073741824;
-			}
-			$this->uploadMaxSize = intval($size)*$n;
+			$this->uploadMaxSize = elFinder::getIniBytes('', $this->options['uploadMaxSize']);
 		}
 		// Set maximum to PHP_INT_MAX
 		if (!defined('PHP_INT_MAX')) {
@@ -1131,6 +1128,14 @@ abstract class elFinderVolumeDriver {
 		}
 		if ($this->uploadMaxSize < 1 || $this->uploadMaxSize > PHP_INT_MAX) {
 			$this->uploadMaxSize = PHP_INT_MAX;
+		}
+		
+		// Set to get maximum size to 50% of memory_limit
+		$memLimit = elFinder::getIniBytes('memory_limit') / 2;
+		if ($memLimit > 0) {
+			$this->getMaxSize = empty($this->options['getMaxSize'])? $memLimit : min($memLimit, elFinder::getIniBytes('', $this->options['getMaxSize']));
+		} else {
+			$this->getMaxSize = -1;
 		}
 		
 		$this->disabled = isset($this->options['disabled']) && is_array($this->options['disabled'])
@@ -2454,6 +2459,10 @@ abstract class elFinderVolumeDriver {
 			return $this->setError(elFinder::ERROR_PERM_DENIED);
 		}
 		
+		if ($this->getMaxSize > 0 && $file['size'] > $this->getMaxSize) {
+			return $this->setError(elFinder::ERROR_UPLOAD_FILE_SIZE);
+		}
+		
 		return $this->_getContents($this->convEncIn($this->decode($hash), true));
 	}
 	
@@ -2478,6 +2487,15 @@ abstract class elFinderVolumeDriver {
 		
 		if (!$file['write']) {
 			return $this->setError(elFinder::ERROR_PERM_DENIED);
+		}
+		
+		// check data cheme
+		if (preg_match('~^data:(.+?/.+?);base64,~', $content, $m)) {
+			$dMime =$m[1];
+			if ($file['size'] > 0 && $dMime !== $file['mime']) {
+				return $this->setError(elFinder::ERROR_PERM_DENIED);
+			}
+			$content = base64_decode(substr($content, strlen($m[0])));
 		}
 		
 		// check MIME
@@ -5672,24 +5690,24 @@ abstract class elFinderVolumeDriver {
 			
 			if ($ctar == 0) {
 				$arcs['create']['application/x-tar']  = array('cmd' => 'tar', 'argc' => '-cf', 'ext' => 'tar');
-				$arcs['extract']['application/x-tar'] = array('cmd' => 'tar', 'argc' => '-xf', 'ext' => 'tar');
+				$arcs['extract']['application/x-tar'] = array('cmd' => 'tar', 'argc' => '-xf', 'ext' => 'tar', 'toSpec' => '-C ');
 				unset($o);
-				$test = $this->procExec('gzip --version', $o, $c);
+				$this->procExec('gzip --version', $o, $c);
 				if ($c == 0) {
 					$arcs['create']['application/x-gzip']  = array('cmd' => 'tar', 'argc' => '-czf', 'ext' => 'tgz');
-					$arcs['extract']['application/x-gzip'] = array('cmd' => 'tar', 'argc' => '-xzf', 'ext' => 'tgz');
+					$arcs['extract']['application/x-gzip'] = array('cmd' => 'tar', 'argc' => '-xzf', 'ext' => 'tgz', 'toSpec' => '-C ');
 				}
 				unset($o);
-				$test = $this->procExec('bzip2 --version', $o, $c);
+				$this->procExec('bzip2 --version', $o, $c);
 				if ($c == 0) {
 					$arcs['create']['application/x-bzip2']  = array('cmd' => 'tar', 'argc' => '-cjf', 'ext' => 'tbz');
-					$arcs['extract']['application/x-bzip2'] = array('cmd' => 'tar', 'argc' => '-xjf', 'ext' => 'tbz');
+					$arcs['extract']['application/x-bzip2'] = array('cmd' => 'tar', 'argc' => '-xjf', 'ext' => 'tbz', 'toSpec' => '-C ');
 				}
 				unset($o);
-				$test = $this->procExec('xz --version', $o, $c);
+				$this->procExec('xz --version', $o, $c);
 				if ($c == 0) {
 					$arcs['create']['application/x-xz']  = array('cmd' => 'tar', 'argc' => '-cJf', 'ext' => 'xz');
-					$arcs['extract']['application/x-xz'] = array('cmd' => 'tar', 'argc' => '-xJf', 'ext' => 'xz');
+					$arcs['extract']['application/x-xz'] = array('cmd' => 'tar', 'argc' => '-xJf', 'ext' => 'xz', 'toSpec' => '-C ');
 				}
 			}
 			unset($o);
@@ -5700,37 +5718,35 @@ abstract class elFinderVolumeDriver {
 			unset($o);
 			$this->procExec('unzip --help', $o, $c);
 			if ($c == 0) {
-				$arcs['extract']['application/zip'] = array('cmd' => 'unzip', 'argc' => '',  'ext' => 'zip');
+				$arcs['extract']['application/zip'] = array('cmd' => 'unzip', 'argc' => '',  'ext' => 'zip', 'toSpec' => '-d ');
 			}
 			unset($o);
 			$this->procExec('rar --version', $o, $c);
 			if ($c == 0 || $c == 7) {
 				$arcs['create']['application/x-rar']  = array('cmd' => 'rar', 'argc' => 'a -inul', 'ext' => 'rar');
-				$arcs['extract']['application/x-rar'] = array('cmd' => 'rar', 'argc' => 'x -y',    'ext' => 'rar');
-			} else {
-				unset($o);
-				$test = $this->procExec('unrar', $o, $c);
-				if ($c==0 || $c == 7) {
-					$arcs['extract']['application/x-rar'] = array('cmd' => 'unrar', 'argc' => 'x -y', 'ext' => 'rar');
-				}
+			}
+			unset($o);
+			$this->procExec('unrar', $o, $c);
+			if ($c==0 || $c == 7) {
+				$arcs['extract']['application/x-rar'] = array('cmd' => 'unrar', 'argc' => 'x -y', 'ext' => 'rar', 'toSpec' => '');
 			}
 			unset($o);
 			$this->procExec('7za --help', $o, $c);
 			if ($c == 0) {
 				$arcs['create']['application/x-7z-compressed']  = array('cmd' => '7za', 'argc' => 'a', 'ext' => '7z');
-				$arcs['extract']['application/x-7z-compressed'] = array('cmd' => '7za', 'argc' => 'x -y', 'ext' => '7z');
+				$arcs['extract']['application/x-7z-compressed'] = array('cmd' => '7za', 'argc' => 'x -y', 'ext' => '7z', 'toSpec' => '-o');
 				
 				if (empty($arcs['create']['application/zip'])) {
 					$arcs['create']['application/zip'] = array('cmd' => '7za', 'argc' => 'a -tzip', 'ext' => 'zip');
 				}
 				if (empty($arcs['extract']['application/zip'])) {
-					$arcs['extract']['application/zip'] = array('cmd' => '7za', 'argc' => 'x -tzip -y', 'ext' => 'zip');
+					$arcs['extract']['application/zip'] = array('cmd' => '7za', 'argc' => 'x -tzip -y', 'ext' => 'zip', 'toSpec' => '-o');
 				}
 				if (empty($arcs['create']['application/x-tar'])) {
 					$arcs['create']['application/x-tar'] = array('cmd' => '7za', 'argc' => 'a -ttar', 'ext' => 'tar');
 				}
 				if (empty($arcs['extract']['application/x-tar'])) {
-					$arcs['extract']['application/x-tar'] = array('cmd' => '7za', 'argc' => 'x -ttar -y', 'ext' => 'tar');
+					$arcs['extract']['application/x-tar'] = array('cmd' => '7za', 'argc' => 'x -ttar -y', 'ext' => 'tar', 'toSpec' => '-o');
 				}
 			} else if (substr(PHP_OS,0,3) === 'WIN') {
 				// check `7z` for Windows server.
@@ -5738,19 +5754,22 @@ abstract class elFinderVolumeDriver {
 				$this->procExec('7z', $o, $c);
 				if ($c == 0) {
 					$arcs['create']['application/x-7z-compressed']  = array('cmd' => '7z', 'argc' => 'a', 'ext' => '7z');
-					$arcs['extract']['application/x-7z-compressed'] = array('cmd' => '7z', 'argc' => 'x -y', 'ext' => '7z');
+					$arcs['extract']['application/x-7z-compressed'] = array('cmd' => '7z', 'argc' => 'x -y', 'ext' => '7z', 'toSpec' => '-o');
 					
 					if (empty($arcs['create']['application/zip'])) {
 						$arcs['create']['application/zip'] = array('cmd' => '7z', 'argc' => 'a -tzip', 'ext' => 'zip');
 					}
 					if (empty($arcs['extract']['application/zip'])) {
-						$arcs['extract']['application/zip'] = array('cmd' => '7z', 'argc' => 'x -tzip -y', 'ext' => 'zip');
+						$arcs['extract']['application/zip'] = array('cmd' => '7z', 'argc' => 'x -tzip -y', 'ext' => 'zip', 'toSpec' => '-o');
 					}
 					if (empty($arcs['create']['application/x-tar'])) {
 						$arcs['create']['application/x-tar'] = array('cmd' => '7z', 'argc' => 'a -ttar', 'ext' => 'tar');
 					}
 					if (empty($arcs['extract']['application/x-tar'])) {
-						$arcs['extract']['application/x-tar'] = array('cmd' => '7z', 'argc' => 'x -ttar -y', 'ext' => 'tar');
+						$arcs['extract']['application/x-tar'] = array('cmd' => '7z', 'argc' => 'x -ttar -y', 'ext' => 'tar', 'toSpec' => '-o');
+					}
+					if (empty($arcs['extract']['application/x-rar'])) {
+						$arcs['extract']['application/x-rar'] = array('cmd' => '7z', 'argc' => 'x -trar -y', 'ext' => 'rar', 'toSpec' => '-o');
 					}
 				}
 			}
@@ -5870,26 +5889,40 @@ abstract class elFinderVolumeDriver {
 	/**
 	 * Unpack archive
 	 *
-	 * @param  string  $path   archive path
-	 * @param  array   $arc    archiver command and arguments (same as in $this->archivers)
-	 * @param  bool    $remove remove archive ( unlink($path) )
+	 * @param  string      $path  archive path
+	 * @param  array       $arc   archiver command and arguments (same as in $this->archivers)
+	 * @param  bool|string $mode  bool: remove archive ( unlink($path) ) | string: extract to directory
 	 * @return void
 	 * @author Dmitry (dio) Levashov
 	 * @author Alexey Sukhotin
 	 * @author Naoki Sawada
 	 **/
-	protected function unpackArchive($path, $arc, $remove = true) {
-		$dir = dirname($path);
+	protected function unpackArchive($path, $arc, $mode = true) {
+		if (is_string($mode)) {
+			$dir = $mode;
+			$chdir = null;
+			$remove = false;
+		} else {
+			$dir = dirname($path);
+			$chdir = $dir;
+			$remove = $mode;
+		}
+		$dir = realpath($dir);
+		$path = realpath($path);
 		if ($arc['cmd'] === 'phpfunction') {
 			if (is_callable($arc['argc'])) {
 				call_user_func_array($arc['argc'], array($path, $dir));
 			}
 		} else {
 			$cwd = getcwd();
-			if (chdir($dir)) {
-				$cmd = $arc['cmd'].' '.$arc['argc'].' '.escapeshellarg(basename($path));
+			if (!$chdir || chdir($dir)) {
+				if ($chdir) {
+					$cmd = $arc['cmd'].' '.$arc['argc'].' '.escapeshellarg(basename($path));
+				} else {
+					$cmd = $arc['cmd'].' '.$arc['argc'].' '.escapeshellarg($path).' '.$arc['toSpec'].escapeshellarg($dir);
+				}
 				$this->procExec($cmd, $o, $c);
-				chdir($cwd);
+				$chdir && chdir($cwd);
 			}
 		}
 		$remove && unlink($path);

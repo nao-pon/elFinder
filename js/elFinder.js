@@ -10,6 +10,13 @@ var elFinder = function(node, opts) {
 	var self = this,
 		
 		/**
+		 * Plugin name to check for conflicts with bootstrap etc
+		 *
+		 * @type Array
+		 **/
+		conflictChecks = ['button'],
+		
+		/**
 		 * Node on which elfinder creating
 		 *
 		 * @type jQuery
@@ -362,7 +369,7 @@ var elFinder = function(node, opts) {
 				f, i;
 
 			for (i = 0; i < l; i++) {
-				f = data[i];
+				f = Object.assign({}, data[i]);
 				if (f.name && f.hash && f.mime) {
 					if (sorterChk && f.phash === cwd) {
 						setSorter(f);
@@ -404,6 +411,60 @@ var elFinder = function(node, opts) {
 			
 			// for empty folder
 			sorterChk && setSorter();
+		},
+		
+		/**
+		 * Delete file object from files caches
+		 * 
+		 * @param  Array  removed hashes
+		 * @return void
+		 */
+		remove = function(removed) {
+			var l       = removed.length,
+				roots   = {},
+				rm      = function(hash) {
+					var file = files[hash], i;
+					if (file) {
+						if (file.mime === 'directory') {
+							if (roots[hash]) {
+								delete self.roots[roots[hash]];
+							}
+							if (self.searchStatus.state < 2) {
+								$.each(files, function(h, f) {
+									f.phash == hash && rm(h);
+								});
+							}
+						}
+						deleteCache(files[hash]);
+					}
+				};
+		
+			$.each(self.roots, function(k, v) {
+				roots[v] = k;
+			});
+			while (l--) {
+				rm(removed[l]);
+			}
+		},
+		
+		/**
+		 * Update file object in files caches
+		 * 
+		 * @param  Array  changed file objects
+		 * @return void
+		 */
+		change = function(changed) {
+			$.each(changed, function(i, file) {
+				var hash = file.hash;
+				if (files[hash]) {
+					$.each(['locked', 'hidden', 'width', 'height'], function(i, v){
+						if (files[hash][v] && !file[v]) {
+							delete files[hash][v];
+						}
+					});
+				}
+				files[hash] = files[hash] ? Object.assign(files[hash], file) : file;
+			});
 		},
 		
 		/**
@@ -655,6 +716,14 @@ var elFinder = function(node, opts) {
 	if (! inFrame && ! this.options.enableAlways && $('body').children().length === 2) { // only node and beeper
 		this.options.enableAlways = true;
 	}
+	
+	// Check and save conflicts with bootstrap etc
+	this.noConflicts = {};
+	$.each(conflictChecks, function(i, p) {
+		if ($.fn[p] && typeof $.fn[p].noConflict === 'function') {
+			self.noConflicts[p] = $.fn[p].noConflict();
+		}
+	});
 	
 	/**
 	 * Is elFinder over CORS
@@ -1694,10 +1763,11 @@ var elFinder = function(node, opts) {
 				if (isOpen) {
 					open(data);
 				} else {
-					cache(data.files || []);
-					cache(data.tree || []);
+					self.updateCache(data);
 				}
-
+				
+				data.changed && data.changed.length && change(data.changed);
+				
 				self.lazy(function() {
 					// fire some event to update cache/ui
 					data.removed && data.removed.length && self.remove(data);
@@ -2048,6 +2118,22 @@ var elFinder = function(node, opts) {
 	};
 	
 	/**
+	 * Update file object caches by respose data object
+	 * 
+	 * @param  Object  respose data object
+	 * @return void
+	 */
+	this.updateCache = function(data) {
+		if ($.isPlainObject(data)) {
+			data.files && data.files.length && cache(data.files);
+			data.tree && data.tree.length && cache(data.tree);
+			data.removed && data.removed.length && remove(data.removed);
+			data.added && data.added.length && cache(data.added);
+			data.changed && data.changed.length && change(data.changed);
+		}
+	};
+	
+	/**
 	 * Compare current files cache with new files and return diff
 	 * 
 	 * @param  Array   new files
@@ -2157,10 +2243,10 @@ var elFinder = function(node, opts) {
 				while(phash) {
 					if (pdir = self.file(phash)) {
 						if (phash.indexOf(curId) !== 0) {
+							parents.push( {target: phash, cmd: 'tree'} );
 							if (! self.isRoot(pdir)) {
-								parents.push( {target: phash, cmd: 'tree'} );
+								parents.push( {target: phash, cmd: 'parents'} );
 							}
-							parents.push( {target: phash, cmd: 'parents'} );
 							curRoot = self.file(self.root(phash));
 							curId = curRoot? curRoot.volumeid : null;
 						}
@@ -2238,6 +2324,10 @@ var elFinder = function(node, opts) {
 			var diff = self.diff(odata.files.concat(pdata && pdata.tree ? pdata.tree : []), onlydir);
 
 			diff.added.push(odata.cwd);
+			
+			self.updateCache(diff);
+			
+			// trigger events
 			diff.removed.length && self.remove(diff);
 			diff.added.length   && self.add(diff);
 			diff.changed.length && self.change(diff);
@@ -2321,16 +2411,14 @@ var elFinder = function(node, opts) {
 	 * @return elFinder
 	 */
 	this.trigger = function(type, data, allowModify) {
-		var type     = type.toLowerCase(),
-			isopen   = (type === 'open'),
-			handlers = listeners[type] || [], i, l, jst, event;
+		var type      = type.toLowerCase(),
+			isopen    = (type === 'open'),
+			dataIsObj = (typeof data === 'object'),
+			handlers  = listeners[type] || [], i, l, jst, event;
 		
 		this.debug('event-'+type, data);
 		
-		if (isopen && !allowModify) {
-			// for performance tuning
-			jst = JSON.stringify(data);
-		}
+		allowModify = true;
 		if (l = handlers.length) {
 			event = $.Event(type);
 			if (allowModify) {
@@ -2342,11 +2430,14 @@ var elFinder = function(node, opts) {
 					// probably un-binded this handler
 					continue;
 				}
-				// only callback has argument
+				// set `event.data` only callback has argument
 				if (handlers[i].length) {
 					if (!allowModify) {
 						// to avoid data modifications. remember about "sharing" passing arguments in js :) 
-						event.data = isopen? JSON.parse(jst) : Object.assign({}, data);
+						if (dataIsObj && !jst) {
+							jst = JSON.stringify(data);
+						}
+						event.data = jst? JSON.parse(jst) : data;
 					}
 				}
 
@@ -2495,6 +2586,11 @@ var elFinder = function(node, opts) {
 	this.isCommandEnabled = function(name, dstHash) {
 		var disabled,
 			cvid = self.cwd().volumeid || '';
+		
+		// In serach results use selected item hash to check
+		if (!dstHash && self.searchStatus.state > 1 && self.selected().length) {
+			dstHash = self.selected()[0];
+		}
 		if (dstHash && (! cvid || dstHash.indexOf(cvid) !== 0)) {
 			disabled = self.option('disabled', dstHash);
 			if (! disabled) {
@@ -2860,7 +2956,9 @@ var elFinder = function(node, opts) {
 		var lastnode = node.children(':last');
 		target = $(target);
 		if (lastnode.get(0) !== target.get(0)) {
-			lastnode.after(target);
+			target.trigger('beforedommove')
+				.insertAfter(lastnode)
+				.trigger('dommove');
 		}
 	};
 	
@@ -3342,58 +3440,12 @@ var elFinder = function(node, opts) {
 				}
 			})
 		})
-		.add(function(e) {
-			cache(e.data.added || []);
-		})
-		.change(function(e) {
-			$.each(e.data.changed||[], function(i, file) {
-				var hash = file.hash;
-				if (files[hash]) {
-					$.each(['locked', 'hidden', 'width', 'height'], function(i, v){
-						if (files[hash][v] && !file[v]) {
-							delete files[hash][v];
-						}
-					});
-				}
-				files[hash] = files[hash] ? Object.assign(files[hash], file) : file;
-			});
-		})
-		.remove(function(e) {
-			var removed = e.data.removed||[],
-				l       = removed.length,
-				roots   = {},
-				rm      = function(hash) {
-					var file = files[hash], i;
-					if (file) {
-						if (file.mime === 'directory') {
-							if (roots[hash]) {
-								delete self.roots[roots[hash]];
-							}
-							if (self.searchStatus.state < 2) {
-								$.each(files, function(h, f) {
-									f.phash == hash && rm(h);
-								});
-							}
-						}
-						deleteCache(files[hash]);
-					}
-				};
-		
-			$.each(self.roots, function(k, v) {
-				roots[v] = k;
-			});
-			while (l--) {
-				rm(removed[l]);
-			}
-			
-		})
 		.bind('searchstart', function(e) {
 			Object.assign(self.searchStatus, e.data);
 			self.searchStatus.state = 1;
 		})
 		.bind('search', function(e) {
 			self.searchStatus.state = 2;
-			cache(e.data.files || []);
 		})
 		.bind('searchend', function() {
 			self.searchStatus.state = 0;
@@ -3428,10 +3480,10 @@ var elFinder = function(node, opts) {
 	// in getFileCallback set - change default actions on double click/enter/ctrl+enter
 	if (this.commands.getfile) {
 		if (typeof(this.options.getFileCallback) == 'function') {
-			this.bind('dblclick', function() {
+			this.bind('dblclick', function(e) {
 				this.preventDefault();
 				self.exec('getfile').fail(function() {
-					self.exec('open');
+					self.exec('open', e.data && e.data.file? [ e.data.file ]: void(0));
 				});
 			});
 			this.shortcut({
@@ -3726,6 +3778,7 @@ var elFinder = function(node, opts) {
 						self.error(data.error);
 					} else {
 						data.warning && self.error(data.warning);
+						self.updateCache(data);
 						data.removed && data.removed.length && self.remove(data);
 						data.added   && data.added.length   && self.add(data);
 						data.changed && data.changed.length && self.change(data);
@@ -3925,11 +3978,16 @@ var elFinder = function(node, opts) {
 			var lastX, lastY, nodeOffset, nodeWidth, nodeTop, navbarW, toolbarH,
 				navbar = self.getUI('navbar'),
 				toolbar = self.getUI('toolbar'),
+				moveEv = 'touchmove.stopscroll',
+				moveTm,
 				moveOn  = function(e) {
 					e.preventDefault();
+					moveTm && clearTimeout(moveTm);
 				},
 				moveOff = function() {
-					$(document).off('touchmove', moveOn);
+					moveTm = setTimeout(function() {
+						node.off(moveEv);
+					}, 100);
 				},
 				handleW, handleH = 50;
 
@@ -3984,10 +4042,8 @@ var elFinder = function(node, opts) {
 						nodeTop = nodeOffset.top;
 						if (y - nodeTop < (toolbar.is(':hidden')? handleH : (toolbarH + 30))) {
 							lastY = y;
-							$(document).on('touchmove.' + namespace, moveOn);
-							setTimeout(function() {
-								moveOff();
-							}, 500);
+							node.on(moveEv, moveOn);
+							moveOff();
 						} else {
 							lastY = false;
 						}
@@ -4760,6 +4816,7 @@ elFinder.prototype = {
 						if (data) {
 							self.currentReqCmd = 'upload';
 							data.warning && self.error(data.warning);
+							self.updateCache(data);
 							data.removed && self.remove(data);
 							data.added   && self.add(data);
 							data.changed && self.change(data);
@@ -6504,7 +6561,7 @@ elFinder.prototype = {
 	uniqueName : function(prefix, phash, glue) {
 		var i = 0, ext = '', p, name;
 		
-		prefix = this.i18n(prefix); 
+		prefix = this.i18n(false, prefix);
 		phash = phash || this.cwd().hash;
 		glue = (typeof glue === 'undefined')? ' ' : glue;
 
@@ -7225,7 +7282,7 @@ elFinder.prototype = {
 		opts = opts || {};
 		
 		$.each(files, function(i, f) {
-			if (f.phash === cwdHash) {
+			if (f.phash === cwdHash || self.searchStatus.state > 1) {
 				newItem = newItem.add(cwd.find('#'+self.cwdHash2Id(f.hash)));
 				if (opts.firstOnly) {
 					return false;
