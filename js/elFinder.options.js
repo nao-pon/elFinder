@@ -147,6 +147,15 @@ elFinder.prototype._options = {
 	lang : 'en',
 
 	/**
+	 * Base URL of elfFinder library starting from Manager HTML
+	 * Auto detect when cssAutoLoad is `true`
+	 * 
+	 * @type String
+	 * @default "./"
+	 */
+	baseUrl : './',
+	
+	/**
 	 * Auto load required CSS
 	 * `false` to disable this function or
 	 * CSS URL Array to load additional CSS files
@@ -433,9 +442,18 @@ elFinder.prototype._options = {
 		},
 		rm: {
 			// If trash is valid, items moves immediately to the trash holder without confirm.
-			quickTrash : true
+			quickTrash : true,
+			// Maximum wait seconds when checking the number of items to into the trash
+			infoCheckWait : 10,
+			// Maximum number of items that can be placed into the Trash at one time
+			toTrashMaxItems : 1000
 		},
-		help : {view : ['about', 'shortcuts', 'help', 'debug']}
+		help : {
+			// Tabs to show
+			view : ['about', 'shortcuts', 'help', 'debug'],
+			// HTML source URL of the heip tab
+			helpSource : ''
+		}
 	},
 	
 	/**
@@ -457,6 +475,8 @@ elFinder.prototype._options = {
 	
 	/**
 	 * Hash of default directory path to open
+	 * 
+	 * NOTE: This setting will be disabled if the target folder is specified in location.hash.
 	 * 
 	 * If you want to find the hash in Javascript
 	 * can be obtained with the following code. (In the case of a standard hashing method)
@@ -949,7 +969,7 @@ elFinder.prototype._options = {
 	/**
 	 * Debug config
 	 *
-	 * @type Array|Boolean
+	 * @type Array|String('auto')|Boolean(true|false)
 	 */
 	// debug : true
 	debug : ['error', 'warning', 'event-destroy']

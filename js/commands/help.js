@@ -160,7 +160,7 @@
 	
 	fm.one('load', function() {
 		var parts = self.options.view || ['about', 'shortcuts', 'help', 'debug'],
-			tabDebug, i;
+			tabDebug, i, helpSource;
 		
 		// debug tab require jQueryUI Tabs Widget
 		if (! $.fn.tabs) {
@@ -177,7 +177,10 @@
 
 		$.inArray('about', parts) !== -1 && about();
 		$.inArray('shortcuts', parts) !== -1 && shortcuts();
-		$.inArray('help', parts) !== -1 && help();
+		if ($.inArray('help', parts) !== -1) {
+			helpSource = fm.baseUrl+'js/i18n/help/%s.html';
+			help();
+		}
 		$.inArray('debug', parts) !== -1 && debug();
 		
 		html.push('</div>');
@@ -188,7 +191,7 @@
 				$(this).toggleClass('ui-state-hover');
 			})
 			.children()
-			.click(function(e) {
+			.on('click', function(e) {
 				var link = $(this);
 				
 				e.preventDefault();
@@ -206,7 +209,10 @@
 		if (useDebug) {
 			tabDebug = content.find('.elfinder-help-tab-debug').hide();
 			debugDIV = content.find('#'+fm.namespace+'-help-debug').children('div:first').tabs();
-			debugUL = debugDIV.children('ul:first');
+			debugUL = debugDIV.children('ul:first').on('click', function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+			});
 
 			self.debug = {};
 	
@@ -225,9 +231,23 @@
 		content.find('#'+fm.namespace+'-help-about').find('.apiver').text(fm.api);
 		self.dialog = fm.dialog(content, {title : self.title, width : 530, autoOpen : false, destroyOnClose : false})
 			.on('click', function(e) {
-				e.preventDefault();
 				e.stopPropagation();
 			});
+		
+		if (helpSource) {
+			self.dialog.one('initContents', function() {
+				$.ajax({
+					url: self.options.helpSource? self.options.helpSource : helpSource.replace('%s', fm.lang),
+					dataType: 'html'
+				}).done(function(source) {
+					$('#'+fm.namespace+'-help-help').html(source);
+				}).fail(function() {
+					$.get(helpSource.replace('%s', 'en'), function(source) {
+						$('#'+fm.namespace+'-help-help').html(source);
+					});
+				});
+			});
+		}
 		
 		self.state = 0;
 	});
@@ -237,7 +257,7 @@
 	};
 	
 	this.exec = function() {
-		this.dialog.elfinderdialog('open').find('.ui-tabs-nav li a:first').click();
+		this.dialog.trigger('initContents').elfinderdialog('open').find('.ui-tabs-nav li a:first').click();
 	};
 
 }).prototype = { forceLoad : true }; // this is required command

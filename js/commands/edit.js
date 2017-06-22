@@ -10,6 +10,7 @@ elFinder.prototype.commands.edit = function() {
 		fm    = this.fm,
 		dlcls = 'elfinder-dialog-edit',
 		texts = fm.res('mimes', 'text') || [],
+		mimesSingle = [],
 		mimes = [],
 		rtrim = function(str){
 			return str.replace(/\s+$/, '');
@@ -44,7 +45,7 @@ elFinder.prototype.commands.edit = function() {
 				ext = files[0].name.replace(/^.*(\.[^.]+)$/, '$1');
 			}
 			return $.map(files, function(file) {
-				return (file.mime.indexOf('text/') === 0 || $.inArray(file.mime, texts) !== -1 || $.inArray(file.mime, mimes) !== -1) 
+				return (file.mime.indexOf('text/') === 0 || $.inArray(file.mime, texts) !== -1 || $.inArray(file.mime, cnt === 1? mimesSingle : mimes) !== -1) 
 					&& file.mime.indexOf('text/rtf')
 					&& (!self.onlyMimes.length || $.inArray(file.mime, self.onlyMimes) !== -1)
 					&& file.read && file.write
@@ -63,10 +64,10 @@ elFinder.prototype.commands.edit = function() {
 		dialog = function(id, file, content, encoding, editor) {
 
 			var dfrd = $.Deferred(),
-				save = function(hash) {
+				save = function() {
 					ta.editor && ta.editor.save(ta[0], ta.editor.instance);
 					old = getContent();
-					dfrd.notifyWith(ta, [selEncoding? selEncoding.val():void(0), hash]);
+					dfrd.notifyWith(ta, [selEncoding? selEncoding.val():void(0), ta.data('hash')]);
 				},
 				cancel = function() {
 					ta.elfinderdialog('close');
@@ -84,14 +85,15 @@ elFinder.prototype.commands.edit = function() {
 						},
 						make = function() {
 							self.mime = file.mime;
-							self.prefix = file.name;
+							self.prefix = file.name.replace(/ \d+(\.[^.]+)?$/, '$1');
 							self.requestCmd = 'mkfile';
 							self.nextAction = { cmd: 'edit', msg: 'cmdedit' };
 							self.data = {target : file.phash};
 							$.proxy(fm.res('mixin', 'make'), self)()
 								.done(function(data) {
 									if (data.added && data.added.length) {
-										save(data.added[0].hash);
+										ta.data('hash', data.added[0].hash);
+										save();
 										dialogNode.show();
 										cancel();
 									} else {
@@ -271,7 +273,7 @@ elFinder.prototype.commands.edit = function() {
 				})();
 			}
 			
-			ta.addClass(clsEditing);
+			ta.addClass(clsEditing).data('hash', file.hash);
 			
 			if (extEditor) {
 				ta.editor = extEditor;
@@ -356,7 +358,7 @@ elFinder.prototype.commands.edit = function() {
 				id     = 'edit-'+fm.namespace+'-'+file.hash,
 				d      = fm.getUI().find('#'+id),
 				conv   = !conv? 0 : conv,
-				error;
+				req, error;
 			
 			
 			if (d.length) {
@@ -370,12 +372,20 @@ elFinder.prototype.commands.edit = function() {
 				return dfrd.reject(error);
 			}
 			
-			fm.request({
-				data   : {cmd : 'get', target  : hash, conv : conv},
-				notify : {type : 'file', cnt : 1},
-				preventDefault : true
-			})
-			.done(function(data) {
+			if (editor && editor.info && editor.info.urlAsContent) {
+				req = $.Deferred();
+				fm.url(hash, { async: true, temporary: true }).done(function(url) {
+					req.resolve({content: url});
+				});
+			} else {
+				req = fm.request({
+					data   : {cmd : 'get', target  : hash, conv : conv},
+					notify : {type : 'file', cnt : 1},
+					preventDefault : true
+				});
+			}
+			
+			req.done(function(data) {
 				var selEncoding;
 				if (data.doconv) {
 					fm.confirm({
@@ -425,13 +435,18 @@ elFinder.prototype.commands.edit = function() {
 									content : ta.getContent.call(ta, ta[0])
 								},
 								notify : {type : 'save', cnt : 1},
-								syncOnFail : true
+								syncOnFail : true,
+								navigate : {
+									target : 'changed',
+									toast : {
+										inbuffer : {msg: fm.i18n(['complete', fm.i18n('btnSave')])}
+									}
+								}
 							})
 							.fail(function(error) {
 								dfrd.reject(error);
 							})
 							.done(function(data) {
-								data.changed && data.changed.length && fm.change(data);
 								setTimeout(function(){
 									ta.focus();
 									ta.editor && ta.editor.focus(ta[0], ta.editor.instance);
@@ -463,9 +478,10 @@ elFinder.prototype.commands.edit = function() {
 		 * Set current editors
 		 * 
 		 * @param  Object  file object
+		 * @param  Number  cnt  count of selected items
 		 * @return Void
 		 */
-		setEditors = function(file) {
+		setEditors = function(file, cnt) {
 			var mimeMatch = function(fileMime, editorMimes){
 					editorMimes = editorMimes || texts.concat('text/');
 					if ($.inArray(fileMime, editorMimes) !== -1 ) {
@@ -498,7 +514,8 @@ elFinder.prototype.commands.edit = function() {
 			editors = {};
 			$.each(self.options.editors || [], function(i, editor) {
 				var name;
-				if (mimeMatch(file.mime, editor.mimes || null)
+				if ((cnt === 1 || !editor.info || !editor.info.single)
+						&& mimeMatch(file.mime, editor.mimes || null)
 						&& extMatch(file.name, editor.exts || null)
 						&& typeof editor.load == 'function'
 						&& typeof editor.save == 'function') {
@@ -529,11 +546,15 @@ elFinder.prototype.commands.edit = function() {
 				}
 				if (!editor.disabled) {
 					if (editor.mimes && Array.isArray(editor.mimes)) {
-						mimes = mimes.concat(editor.mimes);
+						mimesSingle = mimesSingle.concat(editor.mimes);
+						if (!editor.info || !editor.info.single) {
+							mimes = mimes.concat(editor.mimes);
+						}
 					}
 				}
 			});
 			
+			mimesSingle = ($.uniqueSort || $.unique)(mimesSingle);
 			mimes = ($.uniqueSort || $.unique)(mimes);
 			
 			opts.editors = $.map(opts.editors, function(e) {
@@ -543,11 +564,11 @@ elFinder.prototype.commands.edit = function() {
 		
 		fm.bind('select', function() {
 			if (self.enabled()) {
-				setEditors(fm.file(fm.selected()[0]));
+				setEditors(fm.file(fm.selected()[0]), fm.selected().length);
 				if (Object.keys(editors).length > 1) {
 					self.variants = [];
 					$.each(editors, function(name, editor) {
-						self.variants.push([{ editor: editor }, fm.i18n(name)]);
+						self.variants.push([{ editor: editor }, fm.i18n(name), editor.info && editor.info.iconImg? fm.baseUrl + editor.info.iconImg : 'edit']);
 					});
 				} else {
 					delete self.variants;
@@ -581,6 +602,7 @@ elFinder.prototype.commands.edit = function() {
 							{
 								label    : fm.escape(name),
 								icon     : ed.info && ed.info.icon? ed.info.icon : 'edit',
+								options  : { iconImg: ed.info && ed.info.iconImg? fm.baseUrl + ed.info.iconImg : void(0) },
 								callback : function() {
 									dfd.resolve(ed);
 								}

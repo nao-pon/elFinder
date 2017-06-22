@@ -2,7 +2,7 @@
  * Japanese translation
  * @author Tomoaki Yoshida <info@yoshida-studio.jp>
  * @author Naoki Sawada <hypweb@gmail.com>
- * @version 2017-05-26
+ * @version 2017-06-16
  */
 (function(root, factory) {
 	if (typeof define === 'function' && define.amd) {
@@ -113,7 +113,8 @@
 			'errMaxTargets'        : '選択可能な最大アイテム数は $1 個です。', // from v2.1.17 added 17.10.2016
 			'errRestore'           : '宛先の特定ができないため、ごみ箱から戻せません。', // from v2.1.24 added 3.5.2017
 			'errEditorNotFound'    : 'このファイルタイプのエディターがありません。', // from v2.1.25 added 23.5.2017
-
+			'errServerError'       : 'サーバー側でエラーが発生しました。', // from v2.1.25 added 16.6.2017
+			
 			/******************************* commands names ********************************/
 			'cmdarchive'   : 'アーカイブ作成',
 			'cmdback'      : '戻る',
@@ -413,6 +414,8 @@
 			'selectFolder'    : 'フォルダーを選択', // from v2.1.20 added 13.12.2016
 			'firstLetterSearch': '一文字目で検索', // from v2.1.23 added 24.3.2017
 			'presets'         : 'プリセット', // from v2.1.25 added 26.5.2017
+			'tooManyToTrash'  : 'アイテム数が多すぎるのでごみ箱に入れられません。', // from v2.1.25 added 9.6.2017
+			'TextArea'        : 'テキストエリア', // from v2.1.25 added 14.6.2017
 
 			/********************************** mimetypes **********************************/
 			'kindUnknown'     : '不明',
