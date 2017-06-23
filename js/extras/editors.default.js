@@ -197,6 +197,7 @@
 				name : 'Pixlr Editor',
 				iconImg : 'img/edit_pixlreditor.png',
 				urlAsContent: true,
+				schemeContent: true,
 				single: true
 			},
 			// MIME types to accept
@@ -226,11 +227,12 @@
 			}
 		},
 		{
-			// Pixlr Editor
+			// Pixlr Express
 			info : {
 				name : 'Pixlr Express',
 				iconImg : 'img/edit_pixlrexpress.png',
 				urlAsContent: true,
+				schemeContent: true,
 				single: true
 			},
 			// MIME types to accept
@@ -264,6 +266,7 @@
 			info : {
 				name : 'Creative Cloud',
 				iconImg : 'img/edit_creativecloud.png',
+				schemeContent: true,
 				single: true
 			},
 			mimes : ['image/jpeg', 'image/png'],
@@ -585,7 +588,12 @@
 						// CodeMirror configure
 						editor = CodeMirror.fromTextArea(textarea, {
 							lineNumbers: true,
-							lineWrapping: true
+							lineWrapping: true,
+							extraKeys : {
+								'Ctrl-S': function() { self.doSave(); },
+								'Ctrl-Q': function() { self.doCancel(); },
+								'Ctrl-W': function() { self.doCancel(); }
+							}
 						});
 						
 						// return editor instance
@@ -1009,7 +1017,8 @@
 		{
 			// Simple Text (basic textarea editor)
 			info : {
-				name : 'TextArea'
+				name : 'TextArea',
+				useTextAreaEvent : true
 			},
 			load : function(){},
 			save : function(){}
